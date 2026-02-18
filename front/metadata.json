@@ -1,0 +1,7 @@
+{
+  "name": "PharmaFlow ERP",
+  "description": "A comprehensive Enterprise Resource Planning system for medium-sized pharmaceutical companies, featuring inventory management, quality control, production tracking, and AI-powered risk analysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
