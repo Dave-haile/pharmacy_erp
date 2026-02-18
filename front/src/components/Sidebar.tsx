@@ -1,6 +1,7 @@
 
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React from "react";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
@@ -20,6 +21,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse, isMobileOpen, setIsMobileOpen }) => {
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   const sidebarClasses = `
     fixed left-0 top-0 h-screen bg-slate-900 flex flex-col shadow-2xl z-50 transition-all duration-300
@@ -31,7 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse, isMobile
     <>
       {/* Mobile Overlay */}
       {isMobileOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setIsMobileOpen(false)}
         />
@@ -49,8 +51,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse, isMobile
               <span className="text-xl font-bold text-white tracking-tight whitespace-nowrap">PharmaFlow</span>
             )}
           </div>
-          
-          <button 
+
+          <button
             onClick={toggleCollapse}
             className="hidden lg:flex p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
           >
@@ -59,7 +61,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse, isMobile
             </svg>
           </button>
         </div>
-        
+
         <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
@@ -69,22 +71,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse, isMobile
                 to={item.path}
                 onClick={() => setIsMobileOpen(false)}
                 title={isCollapsed ? item.label : ''}
-                className={`flex items-center rounded-xl transition-all duration-200 group relative ${
-                  isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-3'
-                } ${
-                  isActive 
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' 
+                className={`flex items-center rounded-xl transition-all duration-200 group relative ${isCollapsed ? 'justify-center p-3' : 'space-x-3 px-4 py-3'
+                  } ${isActive
+                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                }`}
+                  }`}
               >
-                <svg 
-                  className={`w-5 h-5 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`} 
+                <svg
+                  className={`w-5 h-5 shrink-0 ${isActive ? 'text-white' : 'text-slate-500 group-hover:text-slate-300'}`}
                   fill="none" stroke="currentColor" viewBox="0 0 24 24"
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon} />
                 </svg>
                 {!isCollapsed && <span className="font-medium whitespace-nowrap">{item.label}</span>}
-                
+
                 {isCollapsed && isActive && (
                   <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full" />
                 )}
@@ -98,11 +98,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse, isMobile
             <img src="https://picsum.photos/40/40" className="rounded-full shrink-0" alt="User" />
             {!isCollapsed && (
               <div className="overflow-hidden">
-                <p className="text-sm font-semibold text-white truncate">Dr. Aris Thorne</p>
-                <p className="text-xs text-slate-400 truncate">QA Manager</p>
+                <p className="text-sm font-semibold text-white truncate">{user?.email}</p>
+                <p className="text-xs text-slate-400 truncate">{user?.role}</p>
               </div>
             )}
           </div>
+          {!isCollapsed && (
+            <button
+              type="button"
+              onClick={() => logout()}
+              className="mt-3 w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-2.5 rounded-xl transition-colors"
+            >
+              Log out
+            </button>
+          )}
         </div>
       </div>
     </>

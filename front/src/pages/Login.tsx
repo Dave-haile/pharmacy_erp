@@ -1,36 +1,33 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 
 const Login: React.FC = () => {
-  const [username, setUsername] = useState('admin_demo');
-  const [password, setPassword] = useState('password123');
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("admin_demo");
+  const [password, setPassword] = useState("password123");
+  const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const response = await api.post('/api/login/', {
-        email: username,
-        password,
-      }, {
-        withCredentials: true,
-      });
-      console.log(response);
-      navigate('/');
+      const result = await login(username, password);
+      console.log("Login result:", result);
+
+      navigate("/");
     } catch (err: any) {
-      console.error('Login Failed:', err);
+      console.error("Login Failed:", err);
       const status = err?.response?.status;
       if (status === 401) {
-        setError('Invalid username or password.');
+        setError(err?.response?.data?.error || "Incorrect email or password.");
       } else {
-        setError('System authentication error. Please try again.');
+        setError("System authentication error. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -59,12 +56,12 @@ const Login: React.FC = () => {
               {error}
             </div>
           )}
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-widest">Username</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 required
                 className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-600"
                 placeholder="admin_demo"
@@ -74,8 +71,8 @@ const Login: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-bold text-slate-400 mb-2 uppercase tracking-widest">Password</label>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 required
                 className="w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:ring-2 focus:ring-emerald-500 transition-all placeholder:text-slate-600"
                 placeholder="••••••••"
@@ -85,14 +82,14 @@ const Login: React.FC = () => {
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={isLoading}
             className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-600/20 transition-all active:scale-[0.98] disabled:opacity-50 flex justify-center items-center"
           >
             {isLoading ? "Signing In..." : "Log In to Dashboard"}
           </button>
-          
+
           <div className="text-center">
             <span className="text-slate-500 text-xs italic">Mock Environment Enabled</span>
           </div>

@@ -1,11 +1,13 @@
-import axios from 'axios';
+import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+// Use Vite dev-server proxy by default (same-origin), so HttpOnly cookies work reliably.
+// If you deploy frontend separately, set VITE_API_BASE_URL to your backend origin.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
   withCredentials: true,
 });

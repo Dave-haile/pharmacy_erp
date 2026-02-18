@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   HashRouter as Router,
   Routes,
@@ -14,7 +14,7 @@ import ItemGrouping from "./pages/ItemGrouping";
 import BatchDetails from "./pages/BatchDetails";
 import Login from "./pages/Login";
 import AIAnalysis from "./pages/AIAnalysis";
-import api from "./services/api";
+import { AuthProvider, useAuth } from "./auth/AuthContext";
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -82,23 +82,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const PrivateRoute: React.FC<{ element: React.ReactElement }> = ({
   element,
 }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const res = await api.get("/api/me/");
-        setUser(res.data);
-      } catch {
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
+  const { user, loading } = useAuth();
 
   if (loading) {
     return <div>Loading...</div>;
@@ -109,79 +93,81 @@ const PrivateRoute: React.FC<{ element: React.ReactElement }> = ({
 
 const App: React.FC = () => {
   return (
-    <Router>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<PrivateRoute element={<Dashboard />} />} />
-        <Route
-          path="/inventory"
-          element={<PrivateRoute element={<InventoryHub />} />}
-        />
-        <Route
-          path="/inventory/control"
-          element={<PrivateRoute element={<Inventory />} />}
-        />
-        <Route
-          path="/inventory/item-master"
-          element={<PrivateRoute element={<ItemMaster />} />}
-        />
-        <Route
-          path="/inventory/item-grouping"
-          element={<PrivateRoute element={<ItemGrouping />} />}
-        />
-        <Route
-          path="/inventory/:id"
-          element={<PrivateRoute element={<BatchDetails />} />}
-        />
-        <Route
-          path="/ai-insights"
-          element={<PrivateRoute element={<AIAnalysis />} />}
-        />
-        <Route
-          path="/manufacturing"
-          element={
-            <PrivateRoute
-              element={
-                <div className="p-8 text-center">
-                  <h1 className="text-2xl font-bold">
-                    Manufacturing Module Under Construction
-                  </h1>
-                </div>
-              }
-            />
-          }
-        />
-        <Route
-          path="/quality"
-          element={
-            <PrivateRoute
-              element={
-                <div className="p-8 text-center">
-                  <h1 className="text-2xl font-bold">
-                    Quality Control Module Under Construction
-                  </h1>
-                </div>
-              }
-            />
-          }
-        />
-        <Route
-          path="/sales"
-          element={
-            <PrivateRoute
-              element={
-                <div className="p-8 text-center">
-                  <h1 className="text-2xl font-bold">
-                    Sales & Distribution Module Under Construction
-                  </h1>
-                </div>
-              }
-            />
-          }
-        />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<PrivateRoute element={<Dashboard />} />} />
+          <Route
+            path="/inventory"
+            element={<PrivateRoute element={<InventoryHub />} />}
+          />
+          <Route
+            path="/inventory/control"
+            element={<PrivateRoute element={<Inventory />} />}
+          />
+          <Route
+            path="/inventory/item-master"
+            element={<PrivateRoute element={<ItemMaster />} />}
+          />
+          <Route
+            path="/inventory/item-grouping"
+            element={<PrivateRoute element={<ItemGrouping />} />}
+          />
+          <Route
+            path="/inventory/:id"
+            element={<PrivateRoute element={<BatchDetails />} />}
+          />
+          <Route
+            path="/ai-insights"
+            element={<PrivateRoute element={<AIAnalysis />} />}
+          />
+          <Route
+            path="/manufacturing"
+            element={
+              <PrivateRoute
+                element={
+                  <div className="p-8 text-center">
+                    <h1 className="text-2xl font-bold">
+                      Manufacturing Module Under Construction
+                    </h1>
+                  </div>
+                }
+              />
+            }
+          />
+          <Route
+            path="/quality"
+            element={
+              <PrivateRoute
+                element={
+                  <div className="p-8 text-center">
+                    <h1 className="text-2xl font-bold">
+                      Quality Control Module Under Construction
+                    </h1>
+                  </div>
+                }
+              />
+            }
+          />
+          <Route
+            path="/sales"
+            element={
+              <PrivateRoute
+                element={
+                  <div className="p-8 text-center">
+                    <h1 className="text-2xl font-bold">
+                      Sales & Distribution Module Under Construction
+                    </h1>
+                  </div>
+                }
+              />
+            }
+          />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 };
 
