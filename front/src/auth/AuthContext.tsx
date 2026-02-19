@@ -1,4 +1,11 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import api from "../services/api";
 
 export type BackendUserRole = "admin" | "manager" | "pharmacist" | "cashier";
@@ -23,15 +30,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<BackendUser | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // ✅ fetch current logged-in user
   const refreshMe = useCallback(async () => {
     try {
       const res = await api.get<BackendUser>("/api/me/");
       setUser(res.data);
-    } catch {
+    } catch (err) {
       setUser(null);
     }
   }, []);
 
+  // ✅ run once on app load
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -40,17 +49,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refreshMe]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    await api.post(
-      "/api/login/",
-      { email, password },
-      {
-        withCredentials: true,
-      },
-    );
-    await refreshMe();
-  }, [refreshMe]);
+  // ✅ login function
+  const login = useCallback(
+    async (email: string, password: string) => {
+      const response = await api.post(
+        "/api/login/",
+        { email, password },
+        { withCredentials: true } // ensures cookie is sent
+      );
 
+      console.log("Login response:", response);
+
+      // refresh user info after login
+      await refreshMe();
+    },
+    [refreshMe]
+  );
+
+  // ✅ logout function
   const logout = useCallback(async () => {
     try {
       await api.post("/api/logout/", undefined, { withCredentials: true });
@@ -61,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo<AuthContextValue>(
     () => ({ user, loading, login, logout, refreshMe }),
-    [user, loading, login, logout, refreshMe],
+    [user, loading, login, logout, refreshMe]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -72,4 +88,3 @@ export function useAuth() {
   if (!ctx) throw new Error("useAuth must be used within <AuthProvider />");
   return ctx;
 }
-

@@ -35,16 +35,22 @@ class LoginView(APIView):
         token = AccessToken.for_user(user)
         token.set_exp(from_time=now, lifetime=lifetime)
 
-        response = Response({"message": "Login successful"}, status=status.HTTP_200_OK)
+        response = Response({
+            "message": "Login successful",
+            "access_token": str(token),
+            "token_type": "Bearer",
+            "expires_at": expiry.isoformat()
+        }, status=status.HTTP_200_OK)
 
         # 🔹 Set HttpOnly cookie
         response.set_cookie(
             key="access_token",
             value=str(token),
             httponly=True,
-            secure=not settings.DEBUG,
+            secure=False,  # Set to False for development
             samesite="Lax",
-            expires=expiry
+            expires=expiry,
+            domain=None if settings.DEBUG else None  # Let browser handle domain in dev
         )
 
         return response
@@ -53,5 +59,4 @@ class LogoutView(APIView):
         response = Response({"message": "Logged out"})
         response.delete_cookie("access_token")
         return response
-
 
