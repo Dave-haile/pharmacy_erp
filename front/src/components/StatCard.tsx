@@ -12,15 +12,15 @@ interface StatCardProps {
 
 const StatCard: React.FC<StatCardProps> = ({ title, value, icon, trend, trendColor, colorClass }) => {
   return (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-center space-x-4">
-      <div className={`p-4 rounded-lg ${colorClass}`}>
+    <div className="bg-white p-4 rounded-lg shadow-sm border border-slate-100 flex items-center space-x-3">
+      <div className={`p-2.5 rounded-md ${colorClass}`}>
         {icon}
       </div>
       <div>
-        <p className="text-sm font-medium text-slate-500">{title}</p>
-        <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
+        <p className="text-xs font-medium text-slate-500">{title}</p>
+        <h3 className="text-lg font-bold text-slate-800">{value}</h3>
         {trend && (
-          <p className={`text-xs mt-1 font-semibold ${trendColor}`}>
+          <p className={`text-[10px] mt-0.5 font-semibold ${trendColor}`}>
             {trend}
           </p>
         )}

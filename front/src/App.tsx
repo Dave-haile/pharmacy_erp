@@ -31,14 +31,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
       {/* Main Content Area */}
       <main
-        className={`flex-1 transition-all duration-300 bg-slate-50 min-h-screen ${isCollapsed ? "lg:ml-20" : "lg:ml-64"}`}
+        className={`flex-1 transition-all duration-300 bg-slate-50 min-h-screen ${isCollapsed ? "lg:ml-14" : "lg:ml-52"}`}
       >
         {/* Mobile Header Toggle */}
-        <header className="lg:hidden sticky top-0 bg-slate-900 text-white p-4 flex items-center justify-between z-30 shadow-md">
+        <header className="lg:hidden sticky top-0 bg-slate-900 text-white p-3 flex items-center justify-between z-30 shadow-md">
           <div className="flex items-center space-x-2">
-            <div className="bg-emerald-500 p-1.5 rounded-lg">
+            <div className="bg-emerald-500 p-1 rounded-md">
               <svg
-                className="w-5 h-5 text-white"
+                className="w-4 h-4 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -51,14 +51,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 />
               </svg>
             </div>
-            <span className="font-bold tracking-tight">PharmaFlow</span>
+            <span className="text-sm font-bold tracking-tight">PharmaFlow</span>
           </div>
           <button
             onClick={() => setIsMobileOpen(true)}
-            className="p-2 hover:bg-slate-800 rounded-xl transition-colors"
+            className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors"
           >
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -73,7 +73,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </button>
         </header>
 
-        <div className="max-w-7xl mx-auto p-4 md:p-8">{children}</div>
+        <div className="max-w-6xl mx-auto p-3 md:p-6">{children}</div>
       </main>
     </div>
   );
@@ -127,8 +127,8 @@ const App: React.FC = () => {
             element={
               <PrivateRoute
                 element={
-                  <div className="p-8 text-center">
-                    <h1 className="text-2xl font-bold">
+                  <div className="p-6 text-center">
+                    <h1 className="text-xl font-bold">
                       Manufacturing Module Under Construction
                     </h1>
                   </div>
@@ -141,8 +141,8 @@ const App: React.FC = () => {
             element={
               <PrivateRoute
                 element={
-                  <div className="p-8 text-center">
-                    <h1 className="text-2xl font-bold">
+                  <div className="p-6 text-center">
+                    <h1 className="text-xl font-bold">
                       Quality Control Module Under Construction
                     </h1>
                   </div>
@@ -155,8 +155,8 @@ const App: React.FC = () => {
             element={
               <PrivateRoute
                 element={
-                  <div className="p-8 text-center">
-                    <h1 className="text-2xl font-bold">
+                  <div className="p-6 text-center">
+                    <h1 className="text-xl font-bold">
                       Sales & Distribution Module Under Construction
                     </h1>
                   </div>

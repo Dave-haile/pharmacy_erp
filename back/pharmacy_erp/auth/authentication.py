@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.token_blacklist.models import OutstandingToken, BlacklistedToken
 
 
 class LoginView(APIView):
@@ -35,6 +36,15 @@ class LoginView(APIView):
         token = AccessToken.for_user(user)
         token.set_exp(from_time=now, lifetime=lifetime)
 
+        # 🔹 Record token in OutstandingToken table
+        OutstandingToken.objects.create(
+            user=user,
+            jti=token['jti'],
+            token=str(token),
+            created_at=now,
+            expires_at=expiry
+        )
+
         response = Response({
             "message": "Login successful",
             "access_token": str(token),
@@ -56,6 +66,22 @@ class LoginView(APIView):
         return response
 class LogoutView(APIView):
     def post(self, request):
+        # Get the token from cookie or Authorization header
+        raw_token = request.COOKIES.get("access_token")
+        if raw_token is None:
+            auth_header = request.META.get('HTTP_AUTHORIZATION')
+            if auth_header and auth_header.startswith('Bearer '):
+                raw_token = auth_header.split(' ')[1]
+        
+        if raw_token:
+            try:
+                # Find the outstanding token and blacklist it
+                outstanding_token = OutstandingToken.objects.get(token=raw_token)
+                if not BlacklistedToken.objects.filter(token=outstanding_token).exists():
+                    BlacklistedToken.objects.create(token=outstanding_token)
+            except OutstandingToken.DoesNotExist:
+                pass  # Token not found in outstanding tokens
+        
         response = Response({"message": "Logged out"})
         response.delete_cookie("access_token")
         return response

@@ -50,40 +50,40 @@ const AIAnalysis: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <header className="text-center space-y-2">
-        <div className="inline-block p-3 bg-emerald-100 rounded-2xl mb-4">
-          <svg className="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="max-w-3xl mx-auto space-y-5 animate-in fade-in duration-500">
+      <header className="text-center space-y-1.5">
+        <div className="inline-block p-2.5 bg-emerald-100 rounded-xl mb-3">
+          <svg className="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
         </div>
-        <h1 className="text-4xl font-bold text-slate-800">AI Batch Risk Analyzer</h1>
-        <p className="text-slate-500 text-lg">Predictive quality control powered by Google Gemini</p>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-800">AI Batch Risk Analyzer</h1>
+        <p className="text-slate-500 text-sm">Predictive quality control powered by Google Gemini</p>
       </header>
 
-      <div className="bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
-        <div className="flex flex-col md:flex-row items-end gap-4 mb-8">
-          <div className="flex-1 space-y-2">
-            <label className="text-sm font-bold text-slate-700">Analyzing Batch Information</label>
-            <div className="flex items-center space-x-4">
-               <input 
-                type="text" 
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-mono"
+      <div className="bg-white p-5 md:p-6 rounded-2xl shadow-xl border border-slate-100">
+        <div className="flex flex-col md:flex-row items-end gap-3 mb-6">
+          <div className="flex-1 space-y-1.5">
+            <label className="text-xs font-bold text-slate-700">Analyzing Batch Information</label>
+            <div className="flex items-center space-x-3">
+              <input
+                type="text"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-mono"
                 value={batchId}
                 onChange={(e) => setBatchId(e.target.value)}
                 placeholder="e.g. B-99812"
               />
               {itemData && (
-                <div className="whitespace-nowrap bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold border border-emerald-100">
+                <div className="whitespace-nowrap bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-100">
                   {itemData.name}
                 </div>
               )}
             </div>
           </div>
-          <button 
+          <button
             onClick={() => runAnalysis()}
             disabled={loading}
-            className="bg-slate-900 text-white px-8 py-3.5 rounded-xl font-bold hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center space-x-2"
+            className="bg-slate-900 text-white text-sm px-5 py-2.5 rounded-lg font-bold hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center space-x-2"
           >
             {loading ? (
               <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
@@ -96,33 +96,33 @@ const AIAnalysis: React.FC = () => {
         </div>
 
         {result ? (
-          <div className="space-y-6 animate-in slide-in-from-bottom duration-700">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 text-center flex flex-col justify-center">
-                <p className="text-sm text-slate-500 font-semibold mb-1 uppercase tracking-wider">Risk Score</p>
-                <div className={`text-5xl font-black ${result.riskScore > 50 ? 'text-red-600' : 'text-emerald-600'}`}>
+          <div className="space-y-4 animate-in slide-in-from-bottom duration-700">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center flex flex-col justify-center">
+                <p className="text-xs text-slate-500 font-semibold mb-0.5 uppercase tracking-wider">Risk Score</p>
+                <div className={`text-3xl md:text-4xl font-black ${result.riskScore > 50 ? 'text-red-600' : 'text-emerald-600'}`}>
                   {result.riskScore}
                 </div>
-                <p className={`text-sm font-bold mt-2 ${result.riskLevel?.toLowerCase() === 'high' ? 'text-red-500' : 'text-emerald-500'}`}>
-                   {result.riskLevel} Risk
+                <p className={`text-xs font-bold mt-1 ${result.riskLevel?.toLowerCase() === 'high' ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {result.riskLevel} Risk
                 </p>
               </div>
-              <div className="md:col-span-2 bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                <p className="text-sm text-slate-500 font-semibold mb-2 uppercase tracking-wider">Neural Assessment</p>
-                <p className="text-slate-700 italic leading-relaxed text-lg">"{result.analysis}"</p>
+              <div className="md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <p className="text-xs text-slate-500 font-semibold mb-1.5 uppercase tracking-wider">Neural Assessment</p>
+                <p className="text-slate-700 italic leading-relaxed text-sm">"{result.analysis}"</p>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h3 className="text-xl font-bold text-slate-800 flex items-center space-x-2">
-                <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div className="space-y-3">
+              <h3 className="text-base font-bold text-slate-800 flex items-center space-x-2">
+                <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <span>Recommended Mitigation Steps</span>
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {result.mitigationSteps?.map((step: string, i: number) => (
-                  <div key={i} className="bg-emerald-50/50 border border-emerald-100 p-5 rounded-2xl text-emerald-900 text-sm font-medium shadow-sm">
-                    <div className="bg-emerald-200 text-emerald-700 w-7 h-7 rounded-full flex items-center justify-center mb-3 text-xs font-bold">
-                      {i+1}
+                  <div key={i} className="bg-emerald-50/50 border border-emerald-100 p-3 rounded-xl text-emerald-900 text-xs font-medium shadow-sm">
+                    <div className="bg-emerald-200 text-emerald-700 w-6 h-6 rounded-full flex items-center justify-center mb-2 text-[10px] font-bold">
+                      {i + 1}
                     </div>
                     {step}
                   </div>
@@ -131,8 +131,8 @@ const AIAnalysis: React.FC = () => {
             </div>
           </div>
         ) : !loading && (
-          <div className="p-20 text-center text-slate-400 border-2 border-dashed border-slate-100 rounded-3xl">
-             Select a batch or use manual entry to start AI processing.
+          <div className="p-12 text-center text-slate-400 text-sm border-2 border-dashed border-slate-100 rounded-2xl">
+            Select a batch or use manual entry to start AI processing.
           </div>
         )}
       </div>

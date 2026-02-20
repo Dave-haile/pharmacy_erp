@@ -20,17 +20,17 @@ interface SectionProps {
 
 const CategorySection: React.FC<SectionProps> = ({ title, subtitle, accentColor, icon, links }) => {
   const navigate = useNavigate();
-  
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-6 px-2">
-        <div className="flex items-center space-x-4">
-          <div className={`p-3 rounded-2xl ${accentColor} text-white shadow-lg`}>
+      <div className="flex items-center justify-between mb-4 px-2">
+        <div className="flex items-center space-x-3">
+          <div className={`p-2 rounded-xl ${accentColor} text-white shadow-lg`}>
             {icon}
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">{title}</h2>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{subtitle}</p>
+            <h2 className="text-base font-black text-slate-800 tracking-tight">{title}</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{subtitle}</p>
           </div>
         </div>
       </div>
@@ -40,29 +40,25 @@ const CategorySection: React.FC<SectionProps> = ({ title, subtitle, accentColor,
           <button
             key={idx}
             onClick={() => link.path !== '#' && navigate(link.path)}
-            className={`group relative flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border ${
-              link.active 
-                ? 'bg-slate-900 border-slate-800 shadow-xl' 
+            className={`group relative flex items-center justify-between p-3 rounded-xl transition-all duration-300 border ${link.active
+                ? 'bg-slate-900 border-slate-800 shadow-xl'
                 : 'bg-white border-slate-100 hover:border-slate-200 hover:shadow-md hover:-translate-y-0.5'
-            }`}
+              }`}
           >
-            <div className="flex items-center space-x-3 overflow-hidden">
-              <div className={`w-2.5 h-2.5 rounded-full shrink-0 transition-all duration-500 ${
-                link.highlighted 
-                  ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)] scale-110 animate-pulse' 
+            <div className="flex items-center space-x-2 overflow-hidden">
+              <div className={`w-2 h-2 rounded-full shrink-0 transition-all duration-500 ${link.highlighted
+                  ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)] scale-110 animate-pulse'
                   : 'bg-slate-200 group-hover:bg-slate-300'
-              }`} />
-              <span className={`text-sm font-bold truncate tracking-tight transition-colors ${
-                link.active ? 'text-white' : 'text-slate-600 group-hover:text-slate-900'
-              }`}>
+                }`} />
+              <span className={`text-xs font-bold truncate tracking-tight transition-colors ${link.active ? 'text-white' : 'text-slate-600 group-hover:text-slate-900'
+                }`}>
                 {link.label}
               </span>
             </div>
-            
-            <div className={`transition-all duration-300 transform ${
-              link.active ? 'text-emerald-400' : 'text-slate-300 group-hover:text-slate-500 group-hover:translate-x-1'
-            }`}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+            <div className={`transition-all duration-300 transform ${link.active ? 'text-emerald-400' : 'text-slate-300 group-hover:text-slate-500 group-hover:translate-x-1'
+              }`}>
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
               </svg>
             </div>
@@ -84,7 +80,7 @@ const InventoryHub: React.FC = () => {
       subtitle: 'Catalog & Tariffs',
       accentColor: 'bg-amber-500',
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
         </svg>
       ),
@@ -106,7 +102,7 @@ const InventoryHub: React.FC = () => {
       subtitle: 'Logistics & Movement',
       accentColor: 'bg-emerald-500',
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
         </svg>
       ),
@@ -127,7 +123,7 @@ const InventoryHub: React.FC = () => {
       subtitle: 'Analytics & Audits',
       accentColor: 'bg-blue-600',
       icon: (
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2a2 2 0 012-2h2a2 2 0 012 2v2m-6-9a3 3 0 116 0 3 3 0 01-6 0zm-1 12a5 5 0 1110 0H4z" />
         </svg>
       ),
@@ -144,44 +140,44 @@ const InventoryHub: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-12 animate-in fade-in duration-700 pb-20">
-      <header className="relative py-8 md:py-12 flex flex-col items-center text-center overflow-hidden">
+    <div className="space-y-8 animate-in fade-in duration-700 pb-12">
+      <header className="relative py-5 md:py-8 flex flex-col items-center text-center overflow-hidden">
         {/* Subtle Background Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-emerald-500/5 blur-[120px] rounded-full -z-10" />
-        
-        <div className="inline-flex items-center space-x-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-100 mb-6">
-          <span className="relative flex h-2 w-2">
+
+        <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-100 mb-4">
+          <span className="relative flex h-1.5 w-1.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
           </span>
-          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700">Enterprise Warehouse System v4.2</span>
+          <span className="text-[9px] font-black uppercase tracking-widest text-emerald-700">Enterprise Warehouse System v4.2</span>
         </div>
-        
-        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-slate-800 tracking-tighter mb-4">
+
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-black text-slate-800 tracking-tighter mb-3">
           Stock Management <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-blue-600">Hub</span>
         </h1>
-        <p className="text-slate-500 max-w-2xl text-lg font-medium">
+        <p className="text-slate-500 max-w-xl text-sm font-medium">
           Orchestrate your global pharmaceutical supply chain from a single tactical directory.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 lg:gap-14 px-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 px-2">
         {sections.map((section, idx) => (
           <CategorySection key={idx} {...section} />
         ))}
       </div>
 
       {/* Quick Action Footer */}
-      <footer className="mt-16 pt-16 border-t border-slate-200">
-        <div className="bg-slate-900 rounded-[3rem] p-8 md:p-12 text-white flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl relative overflow-hidden">
+      <footer className="mt-10 pt-10 border-t border-slate-200">
+        <div className="bg-slate-900 rounded-2xl p-5 md:p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[80px] rounded-full translate-x-1/2 -translate-y-1/2" />
-          
-          <div className="space-y-2 relative z-10 text-center md:text-left">
-            <h3 className="text-2xl font-black tracking-tight">Need a Custom Report?</h3>
-            <p className="text-slate-400 text-sm max-w-sm">Use our AI Risk Analyzer to generate predictive audits based on current inventory trends.</p>
+
+          <div className="space-y-1.5 relative z-10 text-center md:text-left">
+            <h3 className="text-lg font-black tracking-tight">Need a Custom Report?</h3>
+            <p className="text-slate-400 text-xs max-w-xs">Use our AI Risk Analyzer to generate predictive audits based on current inventory trends.</p>
           </div>
-          
-          <button className="relative z-10 bg-emerald-500 hover:bg-emerald-400 text-white font-black px-10 py-5 rounded-[2rem] shadow-xl shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap">
+
+          <button className="relative z-10 bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-black px-6 py-3 rounded-xl shadow-xl shadow-emerald-500/20 transition-all hover:scale-105 active:scale-95 whitespace-nowrap">
             Launch AI Intelligence
           </button>
         </div>
