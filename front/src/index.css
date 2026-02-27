@@ -1,1 +1,118 @@
 @import "tailwindcss";
+.bg-primary {
+  background-color: rgb(var(--bg-primary));
+}
+
+.bg-secondary {
+  background-color: rgb(var(--bg-secondary));
+}
+
+.bg-tertiary {
+  background-color: rgb(var(--bg-tertiary));
+}
+
+.text-primary {
+  color: rgb(var(--text-primary));
+}
+
+.text-secondary {
+  color: rgb(var(--text-secondary));
+}
+
+.text-tertiary {
+  color: rgb(var(--text-tertiary));
+}
+
+.border-custom {
+  border-color: rgb(var(--border-color));
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    /* Light mode colors */
+    --bg-primary: 248 250 252;
+    /* slate-50 */
+    --bg-secondary: 255 255 255;
+    /* white */
+    --bg-tertiary: 241 245 249;
+    /* slate-100 */
+    --text-primary: 30 41 59;
+    /* slate-800 */
+    --text-secondary: 100 116 139;
+    /* slate-500 */
+    --text-tertiary: 148 163 184;
+    /* slate-400 */
+    --border-color: 226 232 240;
+    /* slate-200 */
+    --accent-bg: 16 185 129;
+    /* emerald-500 */
+    --accent-text: 255 255 255;
+    /* white */
+    --muted: #1e293b;
+    --foreground: #1e293b;
+  }
+
+  .dark {
+    /* Dark mode colors */
+    --bg-primary: 15 23 42;
+    /* slate-900 */
+    --bg-secondary: 15 23 42;
+    /* slate-800 */
+    --bg-tertiary: 51 65 85;
+    /* slate-700 */
+    --text-primary: 248 250 252;
+    /* slate-50 */
+    --text-secondary: 203 213 225;
+    /* slate-300 */
+    --text-tertiary: 148 163 184;
+    /* slate-400 */
+    --border-color: 51 65 85;
+    /* slate-700 */
+    --accent-bg: 16 185 129;
+    /* emerald-500 */
+    --accent-text: 255 255 255;
+    /* white */
+    --muted: #8e9299;
+    --foreground: #ffffff;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900 transition-colors duration-300 text-[13px];
+  }
+
+  .dark body {
+    @apply bg-slate-950 text-slate-100;
+  }
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-slate-700;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

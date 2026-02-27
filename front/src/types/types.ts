@@ -1,9 +1,8 @@
-
 export enum UserRole {
-  ADMIN = 'ADMIN',
-  PHARMACIST = 'PHARMACIST',
-  QA_MANAGER = 'QA_MANAGER',
-  SALES = 'SALES'
+  ADMIN = "ADMIN",
+  PHARMACIST = "PHARMACIST",
+  QA_MANAGER = "QA_MANAGER",
+  SALES = "SALES",
 }
 
 export interface User {
@@ -29,7 +28,7 @@ export interface InventoryItem {
   unit: string;
   expiryDate: string;
   manufacturingDate: string;
-  status: 'In Stock' | 'Low Stock' | 'Expired' | 'Reserved';
+  status: "In Stock" | "Low Stock" | "Expired" | "Reserved";
   storageCondition: string;
 }
 
@@ -37,7 +36,13 @@ export interface ProductionBatch {
   id: string;
   productName: string;
   batchCode: string;
-  stage: 'Raw Material' | 'Processing' | 'Filling' | 'Packaging' | 'QC Pending' | 'Released';
+  stage:
+    | "Raw Material"
+    | "Processing"
+    | "Filling"
+    | "Packaging"
+    | "QC Pending"
+    | "Released";
   progress: number;
   startDate: string;
   estimatedEndDate: string;
@@ -50,6 +55,25 @@ export interface QualityControlReport {
   purity: number;
   stability: string;
   appearance: string;
-  outcome: 'Passed' | 'Failed' | 'Pending';
+  outcome: "Passed" | "Failed" | "Pending";
   remarks: string;
+}
+export interface MedicineItem {
+  id: string;
+  name: string;
+  generic_name: string;
+  category: string;
+  supplier: string;
+  cost_price: string;
+  selling_price: string;
+  barcode: string;
+  description: string;
+  is_active: boolean;
+  created_at: string;
+}
+export interface Category {
+  id: string;
+  name: string;
+  description: string;
+  created_at: string;
 }

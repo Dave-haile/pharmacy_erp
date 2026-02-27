@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 export const analyzeBatchRisk = async (batchData: any) => {
   const prompt = `Analyze this pharmaceutical production batch for quality risks: ${JSON.stringify(batchData)}. 

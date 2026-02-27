@@ -26,7 +26,9 @@ def me(request):
     return Response({
         "id": request.user.id,
         "email": request.user.email,
-        "role": request.user.role
+        "role": request.user.role,
+        "first_name": request.user.first_name,
+        "last_name": request.user.last_name
     })
 
 @api_view(["POST"])
@@ -53,7 +55,7 @@ def register(request):
     user = User.objects.create_user(email=email, password=password, role=role)
 
     return Response(
-        {"id": user.id, "email": user.email, "role": user.role},
+        {"id": user.id, "email": user.email, "role": user.role, "first_name": user.first_name, "last_name": user.last_name},
         status=status.HTTP_201_CREATED,
     )
 

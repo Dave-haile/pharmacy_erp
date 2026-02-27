@@ -1,123 +1,347 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import SearchableSelect from "../components/SearchableSelect";
+import DataTable, { Column } from "../components/DataTable";
+import { useToast } from "../hooks/useToast";
+import { fetchCategories, fetchItems } from "../services/data";
+import { MedicineItem, Category } from "../types/types";
+
 
 const ItemMaster: React.FC = () => {
-  const [items, setItems] = useState<any[]>([
-    { id: 'p1', name: 'Aspirin Active Pharmaceutical Ingredient', sku: 'RAW-ASP-001', group: 'Raw Materials', unit: 'kg', valuation: '$120.00' },
-    { id: 'p2', name: 'Metformin Hydrochloride Pure', sku: 'RAW-MET-500', group: 'Raw Materials', unit: 'kg', valuation: '$450.00' },
-    { id: 'p3', name: 'Pharma-Grade Gelatin Shells', sku: 'CAP-000-0', group: 'Packaging & Excipients', unit: 'k-units', valuation: '$85.00' },
-    { id: 'p4', name: 'Industrial Ethanol 99%', sku: 'SOL-ETH-99', group: 'Solvents', unit: 'liters', valuation: '$12.50' },
-    { id: 'p5', name: 'Saline Solution Buffer', sku: 'RAW-SAL-100', group: 'Raw Materials', unit: 'kg', valuation: '$5.20' }
-  ]);
+  const [items, setItems] = useState<MedicineItem[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [categoryInputSearch, setCategoryInputSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [filters, setFilters] = useState({
+    name: "",
+    sku: "",
+    group: "",
+  });
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  } | null>(null);
   const navigate = useNavigate();
+  const { showError } = useToast();
 
   useEffect(() => {
-    const fetchItems = async () => {
-      try {
-        const res = await api.get('/api/item-master');
-        setItems(res.data);
-      } catch (e) {
-        console.error("Item Master fetch failed", e);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchItems();
-  }, []);
+    fetchItems(setIsLoading, currentPage, pageSize, filters, setItems, setTotalCount, showError);
+  }, [currentPage, pageSize, filters, showError]);
 
-  const filteredItems = items.filter(i =>
-    i.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    i.sku.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  useEffect(() => {
+    fetchCategories(setIsLoading, 1, 5, categoryInputSearch, setCategories, setTotalCount, showError);
+  }, [categoryInputSearch, showError]);
 
-  return (
-    <div className="space-y-5 animate-in fade-in duration-500 pb-12">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={() => navigate('/inventory')}
-            className="p-2 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-slate-500 shadow-sm"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
-          </button>
-          <div>
-            <h1 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight">Item Master</h1>
-            <p className="text-slate-500 text-xs font-medium">Core Product Definition Registry</p>
-          </div>
+  const paginatedItems = items;
+
+  const handleLoadMore = () => {
+    setCurrentPage((prev) => prev + 1);
+  };
+
+  const handleFilterChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setFilters((prev) => ({ ...prev, group: value }));
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  const handlePageSizeChange = (size: number) => {
+    setPageSize(size);
+    setCurrentPage(1); // Reset to first page when page size changes
+  };
+
+
+  const requestSort = (key: string) => {
+    let direction: "asc" | "desc" = "asc";
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === "asc"
+    ) {
+      direction = "desc";
+    }
+    setSortConfig({ key, direction });
+  };
+
+
+  const itemGroups = categories.map(category => ({
+    value: String(category.id),
+    label: category.name,
+    subtitle: category.description,
+  }));
+
+  const columns: Column<MedicineItem>[] = [
+    {
+      header: "Specification",
+      sortKey: "name",
+      render: (item) => (
+        <div className="flex flex-col">
+          <span className="font-black text-slate-800 dark:text-slate-200 text-[11px] group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+            {item.name}
+          </span>
+          <span className="text-[9px] font-mono text-slate-500 font-bold uppercase tracking-tight">
+            {item.barcode}
+          </span>
         </div>
-        <div className="flex items-center space-x-2">
-          <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-2 w-full md:w-64">
-            <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+      ),
+    },
+    {
+      header: "Generic Name",
+      sortKey: "generic_name",
+      render: (item) => (
+        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          {item.generic_name || "-"}
+        </span>
+      ),
+    },
+    {
+      header: "Category",
+      sortKey: "category",
+      render: (item) => (
+        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          {item.category}
+        </span>
+      ),
+    },
+    {
+      header: "Supplier",
+      sortKey: "supplier",
+      render: (item) => (
+        <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+          {item.supplier || "-"}
+        </span>
+      ),
+    },
+    {
+      header: "Cost Price",
+      sortKey: "cost_price",
+      render: (item) => (
+        <span className="text-[11px] font-black text-slate-600 dark:text-slate-400">
+          ${item.cost_price}
+        </span>
+      ),
+    },
+    {
+      header: "Selling Price",
+      sortKey: "selling_price",
+      render: (item) => (
+        <span className="text-[11px] font-black text-emerald-600 dark:text-emerald-500/80">
+          ${item.selling_price}
+        </span>
+      ),
+    },
+    {
+      header: "Status",
+      headerClassName: "text-right",
+      className: "text-right",
+      render: (item) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">
+          • {item.is_active ? "Active" : "Inactive"}
+        </span>
+      ),
+    },
+  ];
+
+  const Filters = (
+    <div className="flex justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-3xl">
+        <div className="space-y-1.5">
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+            Product Name
+          </label>
+          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-1 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
             <input
               type="text"
-              placeholder="Search specifications..."
-              className="bg-transparent outline-none text-xs w-full font-medium"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              name="name"
+              placeholder="Search name..."
+              className="bg-transparent outline-none text-[11px] w-full font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
+              value={filters.name}
+              onChange={handleFilterChange}
             />
           </div>
-          <button className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-xl hover:bg-slate-800 transition-all whitespace-nowrap">
-            + Create Item
+        </div>
+        <div className="space-y-1.5">
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+            SKU / Code
+          </label>
+          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
+            <input
+              type="text"
+              name="sku"
+              placeholder="Search SKU..."
+              className="bg-transparent outline-none text-[11px] w-full font-mono font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
+              value={filters.sku}
+              onChange={handleFilterChange}
+            />
+          </div>
+        </div>
+        <div className="space-y-1.5 lg:col-span-2">
+          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+            Item Category
+          </label>
+          <SearchableSelect
+            options={itemGroups}
+            value={filters.group}
+            onChange={handleCategoryChange}
+            onSearch={setCategoryInputSearch}
+            placeholder="Select Category"
+            className="w-full"
+            triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
+            onCreateNew={() => navigate("/items/new")}
+            createNewText="Add New Category"
+          />
+        </div>
+      </div>
+      <div className="flex items-center justify-end pt-2">
+        <div className="flex items-center space-x-2">
+          <button className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm">
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.5"
+                d="M3 4.5h18m-18 7.5h18m-18 7.5h18"
+              />
+            </svg>
+            <span>Filter</span>
+          </button>
+          <button className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm">
+            <svg
+              className="w-3 h-3"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.5"
+                d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
+              />
+            </svg>
+            <span>Last Updated</span>
           </button>
         </div>
-      </header>
+      </div>
+    </div>
+  );
 
-      <div className="bg-white rounded-xl md:rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        {isLoading ? (
-          <div className="p-12 text-center">
-            <div className="animate-spin h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full mx-auto mb-3"></div>
-            <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">Accessing Master DB...</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50/50">
-                <tr>
-                  <th className="px-5 py-3 text-[9px] font-black uppercase text-slate-400 tracking-widest">Product Specification</th>
-                  <th className="px-5 py-3 text-[9px] font-black uppercase text-slate-400 tracking-widest">Item Group</th>
-                  <th className="px-5 py-3 text-[9px] font-black uppercase text-slate-400 tracking-widest">UOM</th>
-                  <th className="px-5 py-3 text-[9px] font-black uppercase text-slate-400 tracking-widest">Valuation</th>
-                  <th className="px-5 py-3 text-[9px] font-black uppercase text-slate-400 tracking-widest text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredItems.map(item => (
-                  <tr key={item.id} className="hover:bg-slate-50/50 transition-colors group text-sm">
-                    <td className="px-5 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-slate-800 text-sm">{item.name}</span>
-                        <span className="text-[9px] font-mono text-emerald-600 font-black">{item.sku}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[9px] font-black uppercase tracking-tight">
-                        {item.group}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="text-xs font-bold text-slate-600">{item.unit}</span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="text-xs font-black text-slate-900">{item.valuation}</span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <button className="text-[9px] font-black uppercase text-slate-400 hover:text-emerald-600 transition-colors">
-                        Edit Spec
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+  const Footer = (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div className="flex bg-white dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        {[10, 100, 500].map((size) => (
+          <button
+            key={size}
+            onClick={() => handlePageSizeChange(size)}
+            className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${pageSize === size
+              ? "bg-slate-900 dark:bg-slate-700 text-white shadow-lg"
+              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+              }`}
+          >
+            {size}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center space-x-4">
+        {items.length >= pageSize && (
+          <button
+            onClick={handleLoadMore}
+            className="px-6 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white rounded-xl font-black text-[10px] shadow-sm transition-all uppercase tracking-widest border border-slate-200 dark:border-slate-700"
+          >
+            Load More Records
+          </button>
         )}
       </div>
     </div>
   );
-};
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+      <header className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => navigate("/inventory")}
+            className="p-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-slate-500 dark:text-slate-400 shadow-sm"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.5"
+                d="M10 19l-7-7m0 0l7-7m-7 7h18"
+              />
+            </svg>
+          </button>
+          <div>
+            <h1 className="text-lg md:text-xl font-black text-slate-800 dark:text-white tracking-tight">
+              Item Registry
+            </h1>
+            <p className="text-slate-500 dark:text-slate-400 font-medium text-[10px] uppercase tracking-widest">
+              Master Specification Database
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate("/items/new")}
+          className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all flex items-center space-x-2"
+        >
+          <svg
+            className="w-3.5 h-3.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          <span>Register Item</span>
+        </button>
+      </header>
+
+      <DataTable
+        columns={columns}
+        data={paginatedItems}
+        isLoading={isLoading}
+        filters={Filters}
+        footer={Footer}
+        onRowClick={(item) => navigate(`/items/${item.id}`)}
+        selectable
+        sortConfig={sortConfig}
+        onSort={requestSort}
+        loadingMessage="Accessing Master Registry..."
+        emptyMessage="No items found in master database"
+        headerRight={
+          <div className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+            {items.length} of {totalCount} Records
+          </div>
+        }
+      />
+    </div>
+  );
+};;;;;;;;;;;;;
 
 export default ItemMaster;
