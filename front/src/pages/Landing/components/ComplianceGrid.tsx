@@ -100,7 +100,7 @@ export default function ComplianceGrid() {
                     className="transition-all duration-500 object-cover opacity-20 group-hover:opacity-30 scale-105 group-hover:scale-100"
                   />
 
-                  <div className="absolute inset-0 bg-linear-to-t from-bg-card via-bg-card/80 to-bg-card/20 light:from-white light:via-white/80 light:to-white/20" />
+                  <div className="absolute inset-0 bg-linear-to-t from-bg-card via-bg-card/80 to-bg-card/20" />
                 </>
               )}
 

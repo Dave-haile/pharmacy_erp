@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 export default function LandingPage() {
   return (
-    <div className="bg-bg-base dark:bg-bg-base light:bg-gray-50 min-h-screen overflow-x-hidden body-landing">
+    <div className="bg-bg-base dark:bg-bg-base min-h-screen overflow-x-hidden body-landing">
       <PageMeta
         title="Pharmacy ERP - Modern Pharmacy Management System"
         description="Comprehensive pharmacy management system with AI-powered risk analysis, inventory tracking, and compliance monitoring."
@@ -46,3 +46,6 @@ export default function LandingPage() {
     </div>
   );
 }
+
+// mean enaderg
+// write here 

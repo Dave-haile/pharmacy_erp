@@ -28,3 +28,6 @@ class Inventory(models.Model):
     class Meta:
         db_table = 'Inventory'
         verbose_name_plural = 'Inventory'
+        indexes = [
+            models.Index(fields=['medicine', 'batch_number']),
+        ]

@@ -160,10 +160,10 @@ const InventoryHub: React.FC = () => {
           path: "/inventory/control",
           highlighted: true,
         },
-        { label: "Items", path: "/items", highlighted: true },
+        { label: "Medicine", path: "/inventory/medicines", highlighted: true },
         {
-          label: "Item Grouping",
-          path: "/inventory/item-grouping",
+          label: "Medicine Grouping",
+          path: "/inventory/medicine-grouping",
           highlighted: true,
         },
         { label: "Product Bundles", path: "#", highlighted: true },
@@ -360,7 +360,7 @@ const InventoryHub: React.FC = () => {
                         border: "none",
                         boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
                         fontSize: "8px",
-                        backgroundColor: "#0f172a",
+                        // backgroundColor: "#0f172a",
                         color: "#fff",
                       }}
                     />

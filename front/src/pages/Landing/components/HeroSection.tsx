@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 
 const HERO_WORDS_LINE1 = ["P", "h", "a", "r", "m", "a"];
 const HERO_WORDS_LINE2 = ["O", "p", "s", ","];
@@ -51,7 +52,7 @@ export default function HeroSection() {
       {/* Radial dot grid background */}
       <div
         ref={dotGridRef}
-        className="absolute inset-0 z-0 opacity-[0.18] dark:opacity-[0.18] light:opacity-[0.08] pointer-events-none"
+        className="absolute inset-0 z-0 opacity-[0.18] dark:opacity-[0.18] pointer-events-none"
         style={{
           backgroundImage:
             "radial-gradient(rgba(0,194,203,0.6) 1px, transparent 1px)",
@@ -101,23 +102,23 @@ export default function HeroSection() {
             className="font-sans font-semibold tracking-tight leading-[0.88] select-none"
             style={{ fontSize: "clamp(3.5rem, 9vw, 7.5rem)" }}
           >
-            <span className="block hero-scan-text">
+            <span className="block hero-scan-text dark:text-white">
               <CharReveal chars={HERO_WORDS_LINE1} delay={0.15} />
             </span>
             <span
-              className="block hero-scan-text"
+              className="block hero-scan-text dark:text-white"
               style={{ paddingLeft: "6%", animationDelay: "1s" }}
             >
               <CharReveal chars={HERO_WORDS_LINE2} delay={0.3} />
             </span>
-            <span className="block" style={{ color: "rgb(var(--accent-bg))" }}>
+            <span className="block dark:text-white" style={{ color: "rgb(var(--accent-bg))" }}>
               <CharReveal chars={HERO_WORDS_LINE3} delay={0.45} />
             </span>
           </h1>
 
           {/* Subheadline */}
           <p
-            className="reveal-blur max-w-xl text-lg font-light leading-relaxed text-muted dark:text-muted light:text-gray-600"
+            className="reveal-blur max-w-xl text-lg font-light leading-relaxed text-muted"
             style={{ transitionDelay: "0.7s" }}
           >
             End-to-end ERP for pharmaceutical manufacturers. Batch tracking,
@@ -130,23 +131,22 @@ export default function HeroSection() {
             className="reveal-blur flex flex-wrap items-center gap-4"
             style={{ transitionDelay: "0.9s" }}
           >
-            <a
-              href="#demo"
-              className="group inline-flex items-center gap-3 px-7 py-3.5 rounded-full bg-accent text-white text-sm font-bold tracking-wide hover:bg-accent/90 transition-all hover:shadow-[0_0_32px_rgba(0,194,203,0.4)] active:scale-95"
+            <Link
+              to="#demo"
+              className="flex items-center gap-2 text-sm font-semibold text-white bg-slate-900 dark:bg-emerald-600 px-5 py-2.5 rounded-full hover:bg-slate-800 dark:hover:bg-emerald-500 transition-all shadow-sm"
             >
               Request Demo
               <svg
-                width="14"
-                height="14"
+                width="12"
+                height="12"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2.5"
-                className="transition-transform group-hover:translate-x-1"
               >
                 <path d="M5 12h14M12 5l7 7-7 7" />
               </svg>
-            </a>
+            </Link>
             <a
               href="#platform"
               className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full border border-foreground/10 text-foreground text-sm font-medium hover:bg-foreground/5 transition-all"
@@ -160,13 +160,13 @@ export default function HeroSection() {
             className="reveal-blur flex items-center gap-4 pt-2"
             style={{ transitionDelay: "1.1s" }}
           >
-            <span className="font-mono text-[10px] text-muted/60 dark:text-muted/60 light:text-gray-500 uppercase tracking-widest">
+            <span className="font-mono text-[10px] text-muted/60 uppercase tracking-widest">
               Trusted by
             </span>
             {["FDA", "GMP", "ISO 15189", "ICH Q10"].map((badge) => (
               <span
                 key={badge}
-                className="px-3 py-1 rounded-md border border-white/10 dark:border-white/10 light:border-gray-300 font-mono text-[10px] text-muted dark:text-muted light:text-gray-600 bg-white/[0.03] dark:bg-white/[0.03] light:bg-white"
+                className="px-3 py-1 rounded-md border border-white/10 font-mono text-[10px] text-muted bg-white/[0.03]"
               >
                 {badge}
               </span>

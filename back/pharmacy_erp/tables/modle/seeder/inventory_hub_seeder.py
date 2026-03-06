@@ -16,9 +16,9 @@ class InventoryHubSeeder:
         # Your provided data
         data = [
             {'label': 'Inventory Control', 'path': '/inventory/control', 'highlighted': True},
-            {'label': 'Item Master', 'path': '/inventory/item-master', 'highlighted': True},
-            {'label': 'Item Grouping', 'path': '/inventory/item-grouping', 'highlighted': True},
-            {'label': 'Product Bundles', 'path': '#', 'highlighted': True},
+            {'label': 'Medicine Master', 'path': '/inventory/medicine-master', 'highlighted': True},
+            {'label': 'Medicine Grouping', 'path': '/inventory/medicine-grouping', 'highlighted': True},
+            {'label': 'Medicine Bundles', 'path': '#', 'highlighted': True},
             {'label': 'Global Price List', 'path': '#', 'highlighted': False},
             {'label': 'SKU Pricing', 'path': '#', 'highlighted': False},
             {'label': 'Shipping Rules', 'path': '#', 'highlighted': False},

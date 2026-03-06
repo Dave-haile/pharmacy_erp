@@ -13,6 +13,7 @@ interface SearchableSelectProps {
   onSearch?: (search: string) => void;
   placeholder?: string;
   className?: string;
+  triggerClassName?: string;
   onCreateNew?: () => void;
   createNewText?: string;
 }
@@ -24,6 +25,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   onSearch,
   placeholder = "Search...",
   className = "",
+  triggerClassName = "",
   onCreateNew,
   createNewText = "Create new",
 }) => {
@@ -31,25 +33,39 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   const [inputValue, setInputValue] = useState("");
   const [isUserTyping, setIsUserTyping] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  // Keep last non-empty options so we never flash empty list while parent refetches
+  const stableOptionsRef = useRef<SelectOption[]>(options);
+  if (options.length > 0) {
+    stableOptionsRef.current = options;
+  }
+  const displayOptions = options.length > 0 ? options : stableOptionsRef.current;
 
-  const selectedOption = options.find((opt) => opt.value === value);
+  const selectedOption = React.useMemo(
+    () => displayOptions.find((opt) => String(opt.value) === String(value)),
+    [displayOptions, value]
+  );
 
   useEffect(() => {
     if (!isUserTyping) {
-      if (selectedOption) {
-        setInputValue(selectedOption.label);
-      } else {
-        setInputValue("");
-      }
-    }
-  }, [value, selectedOption, isUserTyping]);
+      const newLabel = selectedOption?.label || "";
 
-  const filteredOptions = options.filter(
-    (option) =>
-      option.label.toLowerCase().includes(inputValue.toLowerCase()) ||
-      (option.subtitle &&
-        option.subtitle.toLowerCase().includes(inputValue.toLowerCase())),
-  );
+      setInputValue((prev) => {
+        if (prev !== newLabel) return newLabel;
+        return prev;
+      });
+    }
+  }, [selectedOption, isUserTyping]);
+
+  const filteredOptions = React.useMemo(() => {
+    const lower = inputValue.toLowerCase();
+
+    return displayOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(lower) ||
+        (option.subtitle &&
+          option.subtitle.toLowerCase().includes(lower))
+    );
+  }, [displayOptions, inputValue]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -66,61 +82,76 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   }, []);
 
   return (
-    <div className={`relative ${className}`} ref={dropdownRef}>
+    <div className={`relative ${className} ${isOpen ? 'z-100' : 'z-0'}`} ref={dropdownRef}>
       {/* Main Input Field */}
-      <input
-        type="text"
-        value={inputValue}
-        placeholder={placeholder}
-        onFocus={() => setIsOpen(true)}
-        onChange={(e) => {
-          const newValue = e.target.value;
-          setInputValue(newValue);
-          setIsOpen(true);
-          setIsUserTyping(true);
+      <div className="relative group">
+        <input
+          type="text"
+          value={inputValue}
+          placeholder={placeholder}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            const newValue = e.target.value;
+            setInputValue(newValue);
+            setIsOpen(true);
+            setIsUserTyping(true);
 
-          // If input is cleared, call onChange with empty value
-          if (newValue === "" && value !== "") {
-            onChange("");
-          }
+            if (newValue === "" && value !== "") {
+              onChange("");
+            }
 
-          if (onSearch) {
-            onSearch(newValue);
-          }
-        }}
-        onBlur={() => {
-          setTimeout(() => setIsUserTyping(false), 100);
-        }}
-        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium outline-none text-slate-900 dark:text-slate-100 shadow-sm focus:border-emerald-500 transition-all"
-      />
+            if (onSearch) {
+              onSearch(newValue);
+            }
+          }}
+          onBlur={() => {
+            setTimeout(() => setIsUserTyping(false), 100);
+          }}
+          className={`w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium outline-none text-slate-900 dark:text-slate-100 shadow-sm focus:border-emerald-500 transition-all placeholder:text-slate-400 ${triggerClassName}`}
+        />
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+          <svg className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
 
-      {/* Dropdown */}
+      {/* Dropdown: stays mounted when open so list content only swaps in place (no unmount flash) */}
       {isOpen && (
-        <div className="custom-scrollbar absolute z-100 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((option) => (
-              <div
-                key={option.value}
-                onClick={() => {
-                  onChange(option.value);
-                  setInputValue(option.label);
-                  setIsOpen(false);
-                }}
-                className="px-3 py-2 text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <div className="font-semibold">{option.label}</div>
-                {option.subtitle && (
-                  <div className="text-[10px] text-slate-400">
-                    {option.subtitle}
+        <div className="min-w-[230px] custom-scrollbar absolute z-100 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="p-1 space-y-0.5">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <div
+                  key={option.value}
+                  onClick={() => {
+                    onChange(option.value);
+                    setInputValue(option.label);
+                    setIsOpen(false);
+                    setIsUserTyping(false);
+                  }}
+                  className={`px-3 py-2 rounded-lg cursor-pointer transition-all group ${value === option.value
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30'
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'
+                    }`}
+                >
+                  <div className={`text-[12px] font-bold tracking-tight ${value === option.value ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white'
+                    }`}>
+                    {option.label}
                   </div>
-                )}
+                  {option.subtitle && (
+                    <div className="text-[9px] font-medium text-slate-400 dark:text-slate-500 mt-0.5 group-hover:text-slate-500 dark:group-hover:text-slate-400 truncate">
+                      {option.subtitle}
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-center">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">No results found</p>
               </div>
-            ))
-          ) : (
-            <div className="px-3 py-4 text-center text-xs text-slate-400">
-              No results found
-            </div>
-          )}
+            )}
+          </div>
 
           {onCreateNew && (
             <div
@@ -128,9 +159,14 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                 onCreateNew();
                 setIsOpen(false);
               }}
-              className="px-3 py-2 border-t border-slate-200 dark:border-slate-800 cursor-pointer text-emerald-600 text-xs hover:bg-slate-50 dark:hover:bg-slate-800"
+              className="p-1.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/50 cursor-pointer"
             >
-              {createNewText} {inputValue ? `'${inputValue}'` : ""}
+              <div className="w-full py-1.5 px-3 rounded-lg bg-emerald-600/5 hover:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center space-x-2 border border-emerald-500/10">
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" />
+                </svg>
+                <span>{createNewText} {inputValue ? `'${inputValue}'` : ""}</span>
+              </div>
             </div>
           )}
         </div>

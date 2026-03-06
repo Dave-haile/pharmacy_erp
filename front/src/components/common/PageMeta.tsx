@@ -4,6 +4,9 @@ import { HelmetProvider, Helmet } from "react-helmet-async";
 import { ThemeProvider } from "../context/ThemeContext";
 import { AuthProvider } from "@/src/auth/AuthContext";
 import { BrowserRouter } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const queryClient = new QueryClient();
 
 const PageMeta = ({
   title,
@@ -19,6 +22,7 @@ const PageMeta = ({
 );
 
 export const AppWrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={queryClient}>
   <ToastProvider>
     <ThemeProvider>
       <AuthProvider>
@@ -28,6 +32,7 @@ export const AppWrapper = ({ children }: { children: React.ReactNode }) => (
       </AuthProvider>
     </ThemeProvider>
   </ToastProvider>
+  </QueryClientProvider>
 );
 
 export default PageMeta;

@@ -19,7 +19,7 @@ class PurchaseItem(models.Model):
     quantity = models.PositiveIntegerField()
     cost_price = models.DecimalField(max_digits=10, decimal_places=2)
 
-    batch_number = models.CharField(max_length=100)
+    batch = models.ForeignKey('batches', on_delete=models.SET_NULL, null=True)
     expiry_date = models.DateField()
 
     def __str__(self):
@@ -28,3 +28,6 @@ class PurchaseItem(models.Model):
     class Meta:
         db_table = 'PurchaseItem'
         verbose_name_plural = 'Purchase Items'
+        indexes = [
+            models.Index(fields=['purchase', 'medicine']),
+        ]

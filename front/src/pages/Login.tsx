@@ -18,7 +18,7 @@ const Login: React.FC = () => {
     try {
       await login(email, password);
 
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: any) {
       console.error("Login Failed:", err);
       const status = err?.response?.status;

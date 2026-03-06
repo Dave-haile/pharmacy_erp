@@ -20,3 +20,6 @@ class Sale(models.Model):
     class Meta:
         db_table = 'Sale'
         verbose_name_plural = 'Sales'
+        indexes = [
+            models.Index(fields=['cashier', 'created_at']),
+        ]

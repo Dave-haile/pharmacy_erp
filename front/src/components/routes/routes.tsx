@@ -12,6 +12,7 @@ import ItemDetails from "@/src/components/ItemDetails";
 import LandingPage from "@/src/pages/Landing/LandingPage";
 import { RouteGuard } from "../common/RouteGuard";
 import NotFound from "@/src/pages/NotFound";
+import AuditLogs from "@/src/pages/AuditLogs";
 interface RouteConfig {
   key: string;
   name: string;
@@ -66,7 +67,7 @@ const routes: RouteConfig[] = [
   {
     key: "items",
     name: "Items",
-    path: "/items",
+    path: "inventory/medicines",
     element: (
       <RouteGuard>
         <ItemMaster />
@@ -76,7 +77,7 @@ const routes: RouteConfig[] = [
   {
     key: "create-item",
     name: "Create Item",
-    path: "/items/new",
+    path: "inventory/medicines/new",
     element: (
       <RouteGuard>
         <CreateItem />
@@ -86,7 +87,7 @@ const routes: RouteConfig[] = [
   {
     key: "item-details",
     name: "Item Details",
-    path: "/items/:id",
+    path: "inventory/medicines/:naming_series",
     element: (
       <RouteGuard>
         <ItemDetails />
@@ -96,7 +97,7 @@ const routes: RouteConfig[] = [
   {
     key: "item-grouping",
     name: "Item Grouping",
-    path: "/inventory/item-grouping",
+    path: "/inventory/categories",
     element: (
       <RouteGuard>
         <ItemGrouping />
@@ -155,6 +156,16 @@ const routes: RouteConfig[] = [
       <div className="p-6 text-center">
         <h1 className="text-xl font-bold">Sales Module Under Construction</h1>
       </div>
+    ),
+  },
+  {
+    key: 'logs',
+    name: "Audit Logs",
+    path: '/audit-logs',
+    element: (
+      <RouteGuard>
+        <AuditLogs />
+      </RouteGuard>
     ),
   },
   {

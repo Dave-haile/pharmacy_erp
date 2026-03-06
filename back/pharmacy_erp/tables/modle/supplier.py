@@ -17,3 +17,6 @@ class Supplier(models.Model):
     class Meta:
         db_table = 'Supplier'
         verbose_name_plural = 'Suppliers'
+        indexes = [
+            models.Index(fields=['name']),
+        ]

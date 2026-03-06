@@ -28,10 +28,9 @@ interface DataTableProps<T> {
   headerRight?: React.ReactNode;
 }
 
-const DataTable = <T extends Record<string, any>>({
+const DataTable = <T extends object>({
   columns,
   data,
-  isLoading = false,
   filters,
   footer,
   onRowClick,
@@ -40,7 +39,6 @@ const DataTable = <T extends Record<string, any>>({
   onSelectChange,
   onSelectAll,
   emptyMessage = "No records found",
-  loadingMessage = "Loading data...",
   idField = "id" as keyof T,
   rowClassName,
   sortConfig,
@@ -50,7 +48,7 @@ const DataTable = <T extends Record<string, any>>({
   const allSelected = data.length > 0 && selectedIds.size === data.length;
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm dark:shadow-2xl overflow-hidden flex flex-col transition-colors">
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm dark:shadow-2xl flex flex-col transition-colors">
       {/* Filter Section */}
       {filters && (
         <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -60,15 +58,6 @@ const DataTable = <T extends Record<string, any>>({
 
       {/* Table Section */}
       <div className="flex-1 min-h-[300px] relative">
-        {isLoading ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-20 bg-white/50 dark:bg-slate-900/50 backdrop-blur-[1px] z-10">
-            <div className="animate-spin h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full mb-4"></div>
-            <p className="text-slate-500 dark:text-slate-400 font-black uppercase tracking-widest text-[10px]">
-              {loadingMessage}
-            </p>
-          </div>
-        ) : null}
-
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -128,9 +117,9 @@ const DataTable = <T extends Record<string, any>>({
               {data.length > 0 ? (
                 data.map((item, rowIdx) => (
                   <tr
-                    key={item[idField] || rowIdx}
+                    key={String(item[idField]) || rowIdx}
                     onClick={() => onRowClick?.(item)}
-                    className={`transition-all group ${onRowClick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/20" : ""} ${selectedIds.has(item[idField]) ? "bg-emerald-50/30 dark:bg-emerald-900/10" : ""} ${rowClassName ? rowClassName(item) : ""}`}
+                    className={`transition-all group ${onRowClick ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/20" : ""} ${selectedIds.has(String(item[idField])) ? "bg-emerald-50/30 dark:bg-emerald-900/10" : ""} ${rowClassName ? rowClassName(item) : ""}`}
                   >
                     {selectable && (
                       <td
@@ -139,8 +128,8 @@ const DataTable = <T extends Record<string, any>>({
                       >
                         <input
                           type="checkbox"
-                          checked={selectedIds.has(item[idField])}
-                          onChange={() => onSelectChange?.(item[idField])}
+                          checked={selectedIds.has(String(item[idField]))}
+                          onChange={() => onSelectChange?.(String(item[idField]))}
                           className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-emerald-500 focus:ring-emerald-500/20 cursor-pointer"
                         />
                       </td>
@@ -155,7 +144,7 @@ const DataTable = <T extends Record<string, any>>({
                     ))}
                   </tr>
                 ))
-              ) : !isLoading ? (
+              ) : (
                 <tr>
                   <td
                     colSpan={columns.length + (selectable ? 1 : 0)}
@@ -166,7 +155,7 @@ const DataTable = <T extends Record<string, any>>({
                     </p>
                   </td>
                 </tr>
-              ) : null}
+              )}
             </tbody>
           </table>
         </div>

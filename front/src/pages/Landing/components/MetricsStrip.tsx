@@ -80,7 +80,7 @@ export default function MetricsStrip() {
     <section className="reveal-group border-t border-b border-white/10 py-20 px-6 lg:px-12 bg-bg-base relative overflow-hidden">
       {/* Background grid */}
       <div
-        className="absolute inset-0 opacity-[0.04] dark:opacity-[0.04] light:opacity-[0.02] pointer-events-none"
+        className="absolute inset-0 opacity-[0.04] dark:opacity-[0.04] pointer-events-none"
         style={{
           backgroundImage:
             "linear-gradient(rgba(0,194,203,1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,194,203,1) 1px, transparent 1px)",

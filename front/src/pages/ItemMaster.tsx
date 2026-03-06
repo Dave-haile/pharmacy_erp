@@ -1,21 +1,28 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from 'react-router-dom';
 import SearchableSelect from "../components/SearchableSelect";
 import DataTable, { Column } from "../components/DataTable";
 import { useToast } from "../hooks/useToast";
-import { fetchCategories, fetchItems } from "../services/data";
-import { MedicineItem, Category } from "../types/types";
-
+import { fetchMedicines } from "../services/medicines";
+import { MedicineItem } from "../types/types";
+import { useQuery } from "@tanstack/react-query";
+import { useCategories } from "../services/common";
+import { fetchSuppliers } from "../services/suppler";
 
 const ItemMaster: React.FC = () => {
   const [items, setItems] = useState<MedicineItem[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [categoryInputSearch, setCategoryInputSearch] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [filters, setFilters] = useState({
+  const [supplierInputSearch, setSupplierInputSearch] = useState("");
+  const [filters, setFilters] = useState<{
+    name: string;
+    generic_name: string;
+    category: string;
+    supplier: string;
+  }>({
     name: "",
-    sku: "",
-    group: "",
+    generic_name: "",
+    category: "",
+    supplier: "",
   });
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -27,13 +34,65 @@ const ItemMaster: React.FC = () => {
   const navigate = useNavigate();
   const { showError } = useToast();
 
-  useEffect(() => {
-    fetchItems(setIsLoading, currentPage, pageSize, filters, setItems, setTotalCount, showError);
-  }, [currentPage, pageSize, filters, showError]);
+  const [debouncedFilters, setDebouncedFilters] = useState(filters);
 
   useEffect(() => {
-    fetchCategories(setIsLoading, 1, 5, categoryInputSearch, setCategories, setTotalCount, showError);
-  }, [categoryInputSearch, showError]);
+    const handler = setTimeout(() => {
+      setDebouncedFilters(filters);
+    }, 500); // wait 500ms
+
+    return () => clearTimeout(handler);
+  }, [filters]);
+  const requestRef = useRef(0);
+  const { data } = useQuery({
+    queryKey: ["medicines", currentPage, pageSize, debouncedFilters],
+    queryFn: () =>
+      fetchMedicines(currentPage, pageSize, debouncedFilters),
+    staleTime: 60 * 1000,
+  });
+  useEffect(() => {
+    const requestId = ++requestRef.current;
+
+
+    const loadData = async () => {
+      try {
+        if (requestRef.current === requestId) {
+          setItems(data?.results || []);
+          setTotalCount(data?.count || 0);
+        }
+      } catch (e) {
+        console.error("Items fetch failed", e);
+
+        if (e.response?.status !== 401) {
+          const errorMessage =
+            e.response?.data?.message ||
+            e.response?.data?.error ||
+            "Failed to fetch medicines. Please try again.";
+          showError(errorMessage);
+        }
+      }
+    };
+
+    loadData();
+  }, [data?.results, data?.count, showError]);
+
+
+
+  const { data: suppliersData } = useQuery({
+    queryKey: ["suppliers", supplierInputSearch],
+    queryFn: () => fetchSuppliers(1, 5, supplierInputSearch),
+    staleTime: 60 * 1000,
+  });
+
+  const supplierGroups = React.useMemo(() => {
+    return suppliersData?.results?.map((supplier) => ({
+      value: String(supplier.id),
+      label: supplier.name,
+      subtitle: `${supplier.phone} - ${supplier.email} - ${supplier.address}`,
+    })) || [];
+  }, [suppliersData?.results]);
+
+
 
   const paginatedItems = items;
 
@@ -50,7 +109,12 @@ const ItemMaster: React.FC = () => {
   };
 
   const handleCategoryChange = (value: string) => {
-    setFilters((prev) => ({ ...prev, group: value }));
+    setFilters((prev) => ({ ...prev, category: value }));
+    setCurrentPage(1); // Reset to first page on filter change
+  };
+
+  const handleSupplierChange = (value: string) => {
+    setFilters((prev) => ({ ...prev, supplier: value }));
     setCurrentPage(1); // Reset to first page on filter change
   };
 
@@ -73,13 +137,18 @@ const ItemMaster: React.FC = () => {
   };
 
 
-  const itemGroups = categories.map(category => ({
-    value: String(category.id),
-    label: category.name,
-    subtitle: category.description,
-  }));
+  const { itemGroups } = useCategories(categoryInputSearch);
 
   const columns: Column<MedicineItem>[] = [
+    {
+      header: "Naming Series",
+      sortKey: "naming_series",
+      render: (item) => (
+        <span className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded">
+          {item.naming_series}
+        </span>
+      ),
+    },
     {
       header: "Specification",
       sortKey: "name",
@@ -152,53 +221,71 @@ const ItemMaster: React.FC = () => {
   ];
 
   const Filters = (
-    <div className="flex justify-between">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-3xl">
-        <div className="space-y-1.5">
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-            Product Name
-          </label>
-          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-1 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
-            <input
-              type="text"
-              name="name"
-              placeholder="Search name..."
-              className="bg-transparent outline-none text-[11px] w-full font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
-              value={filters.name}
-              onChange={handleFilterChange}
+    <div className="flex justify-between gap-4">
+      <div className="flex-1">
+        <div className="flex flex-nowrap gap-3 min-w-max">
+          <div className="space-y-1.5 min-w-[160px]">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Product Name
+            </label>
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
+              <input
+                type="text"
+                name="name"
+                placeholder="Search name..."
+                className="bg-transparent outline-none text-[11px] w-full font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                value={filters.name}
+                onChange={handleFilterChange}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5 min-w-[140px]">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Generic Name
+            </label>
+            <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
+              <input
+                type="text"
+                name="generic_name"
+                placeholder="Search Generic Name..."
+                className="bg-transparent outline-none text-[11px] w-full font-mono font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                value={filters.generic_name}
+                onChange={handleFilterChange}
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5 min-w-[170px]">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Medicine Category
+            </label>
+            <SearchableSelect
+              options={itemGroups}
+              value={filters.category}
+              onChange={handleCategoryChange}
+              onSearch={setCategoryInputSearch}
+              placeholder="Select Category"
+              className="w-full"
+              triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
+              onCreateNew={() => navigate("/items/medicine-categories/new")}
+              createNewText="Add New Medicine Category"
             />
           </div>
-        </div>
-        <div className="space-y-1.5">
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-            SKU / Code
-          </label>
-          <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
-            <input
-              type="text"
-              name="sku"
-              placeholder="Search SKU..."
-              className="bg-transparent outline-none text-[11px] w-full font-mono font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
-              value={filters.sku}
-              onChange={handleFilterChange}
+          <div className="space-y-1.5 min-w-[170px]">
+            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
+              Supplier
+            </label>
+            <SearchableSelect
+              options={supplierGroups}
+              value={filters.supplier}
+              onChange={handleSupplierChange}
+              onSearch={setSupplierInputSearch}
+              placeholder="Select Supplier"
+              className="w-full"
+              triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
+              onCreateNew={() => navigate("/suppliers/medicine-suppliers/new")}
+              createNewText="Add New Medicine Supplier"
             />
           </div>
-        </div>
-        <div className="space-y-1.5 lg:col-span-2">
-          <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-            Item Category
-          </label>
-          <SearchableSelect
-            options={itemGroups}
-            value={filters.group}
-            onChange={handleCategoryChange}
-            onSearch={setCategoryInputSearch}
-            placeholder="Select Category"
-            className="w-full"
-            triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-            onCreateNew={() => navigate("/items/new")}
-            createNewText="Add New Category"
-          />
         </div>
       </div>
       <div className="flex items-center justify-end pt-2">
@@ -302,7 +389,7 @@ const ItemMaster: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={() => navigate("/items/new")}
+          onClick={() => navigate("/inventory/medicines/new")}
           className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all flex items-center space-x-2"
         >
           <svg
@@ -325,10 +412,9 @@ const ItemMaster: React.FC = () => {
       <DataTable
         columns={columns}
         data={paginatedItems}
-        isLoading={isLoading}
         filters={Filters}
         footer={Footer}
-        onRowClick={(item) => navigate(`/items/${item.id}`)}
+        onRowClick={(item) => navigate(`/inventory/medicines/${item.naming_series}`)}
         selectable
         sortConfig={sortConfig}
         onSort={requestSort}
@@ -342,6 +428,6 @@ const ItemMaster: React.FC = () => {
       />
     </div>
   );
-};;;;;;;;;;;;;
+};
 
 export default ItemMaster;

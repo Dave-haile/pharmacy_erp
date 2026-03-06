@@ -21,7 +21,7 @@ export default function CtaSection() {
             />
             {/* Dot grid */}
             <div
-              className="absolute inset-0 opacity-[0.08] dark:opacity-[0.08] light:opacity-[0.03]"
+              className="absolute inset-0 opacity-[0.08] dark:opacity-[0.08]"
               style={{
                 backgroundImage:
                   "radial-gradient(rgba(0,194,203,0.8) 1px, transparent 1px)",

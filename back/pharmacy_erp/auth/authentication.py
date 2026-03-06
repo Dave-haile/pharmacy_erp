@@ -1,6 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth import authenticate
+from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -21,35 +22,40 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        # 🔹 Calculate next 6 AM
-        now = datetime.now()
-        six_am_today = now.replace(hour=6, minute=0, second=0, microsecond=0)
+        # 🔹 Calculate next 6 AM in the current time zone
+        now_local = timezone.localtime()
+        six_am_today_local = now_local.replace(hour=6, minute=0, second=0, microsecond=0)
 
-        if now >= six_am_today:
-            expiry = six_am_today + timedelta(days=1)
+        if now_local >= six_am_today_local:
+            expiry_local = six_am_today_local + timedelta(days=1)
         else:
-            expiry = six_am_today
+            expiry_local = six_am_today_local
 
-        lifetime = expiry - now
+        # Lifetime from "now" until the next 6 AM, regardless of creation time
+        lifetime = expiry_local - now_local
+
+        # Use UTC-aware "now" for JWT and DB
+        now_utc = timezone.now()
+        expiry_utc = now_utc + lifetime
 
         # 🔹 Create access token
         token = AccessToken.for_user(user)
-        token.set_exp(from_time=now, lifetime=lifetime)
+        token.set_exp(from_time=now_utc, lifetime=lifetime)
 
         # 🔹 Record token in OutstandingToken table
         OutstandingToken.objects.create(
             user=user,
             jti=token['jti'],
             token=str(token),
-            created_at=now,
-            expires_at=expiry
+            created_at=now_utc,
+            expires_at=expiry_utc
         )
 
         response = Response({
             "message": "Login successful",
             "access_token": str(token),
             "token_type": "Bearer",
-            "expires_at": expiry.isoformat()
+            "expires_at": expiry_utc.isoformat()
         }, status=status.HTTP_200_OK)
 
         # 🔹 Set HttpOnly cookie
@@ -59,7 +65,7 @@ class LoginView(APIView):
             httponly=True,
             secure=False,  # Set to False for development
             samesite="Lax",
-            expires=expiry,
+            expires=expiry_utc,
             domain=None if settings.DEBUG else None  # Let browser handle domain in dev
         )
 

@@ -27,3 +27,6 @@ class SaleItem(models.Model):
     class Meta:
         db_table = 'SaleItem'
         verbose_name_plural = 'Sale Items'
+        indexes = [
+            models.Index(fields=['sale', 'medicine']),
+        ]

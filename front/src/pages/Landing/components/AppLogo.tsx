@@ -25,7 +25,7 @@ function AppLogo({ text, className = "", onClick }: AppLogoProps) {
       ) : (
         <Hospital size={size} className="shrink-0" />
       )} */}
-      <div className="w-8 h-8 bg-accent-bg rounded-lg flex items-center justify-center bg-primary">
+      <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
         <FlaskConical className="text-white w-5 h-5" />
       </div>
 

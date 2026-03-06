@@ -1,4 +1,11 @@
-:root {
+.root {
+  --bg-primary: 248, 250, 252;
+  --text-primary: 15, 23, 42;
+  --accent-bg: 8, 145, 178;
+  --border-color: 15, 23, 42, 0.08;
+}
+
+.dark {
   --bg-primary: 3, 5, 7;
   --border-color: 255, 255, 255, 0.1;
   
@@ -10,14 +17,6 @@
   --glow-2: rgba(0, 194, 203, 0.08);
   --muted: #8e9299;
   --foreground: #ffffff;
-}
-
-.light {
-  --bg-primary: 248, 250, 252;
-  --text-primary: 15, 23, 42;
-  --accent-bg: 8, 145, 178;
-  --border-color: 15, 23, 42, 0.08;
-
   --bg-base: #f8fafc;
   --bg-card: #ffffff;
   --accent: #0891b2;
@@ -87,9 +86,6 @@
   100% {
     background-position: 250% 0;
   }
-}
-.hero-scan-text { 
-  color: rgb(var(--border-color));
 }
 
 .char-reveal {
@@ -267,6 +263,9 @@
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
   border: 1px solid var(--glass-border);
+}
+.dark .glass {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .gradient-blur {

@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import AppLogo from "./AppLogo";
-import { useNavigate } from "react-router-dom";
-import { useTheme } from "@/src/components/context/ThemeContext";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/src/auth/AuthContext";
+import { useTheme } from "@/src/components/context/ThemeContext";
 
 export default function Header() {
   const [scrolled, setScrolled] = useState(false);
-  const { theme, setTheme } = useTheme();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -32,12 +32,12 @@ export default function Header() {
         />
       </div>
       {/* Nav links (desktop) */}
-      <div className="hidden md:flex pointer-events-auto items-center gap-1 px-2 py-1.5 rounded-full glass border border-foreground/5 light:bg-white/50">
+      <div className="hidden md:flex pointer-events-auto items-center gap-1 px-2 py-1.5 rounded-full glass border border-foreground/5 dark:border-foreground/10">
         {["Platform", "Compliance", "Modules", "Pricing"]?.map((item) => (
           <a
             key={item}
             href={`#${item?.toLowerCase()}`}
-            className="text-xs font-medium text-muted hover:text-foreground transition-colors px-4 py-1.5 rounded-full hover:bg-foreground/5"
+            className=" text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors px-4 py-1.5 rounded-full hover:bg-foreground/5"
           >
             {item}
           </a>
@@ -92,21 +92,22 @@ export default function Header() {
           {user ? (
             <button
               onClick={() => navigate("/dashboard")}
-              className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-black text-sm hover:scale-105 transition-all shadow-xl shadow-emerald-600/20"
+              className="bg-emerald-600 text-white px-5 py-2 cursor-pointer rounded-xl font-black text-sm hover:scale-105 transition-all shadow-xl shadow-emerald-600/20"
             >
               Go to Dashboard
             </button>
           ) : (
             <button
               onClick={() => navigate("/login")}
-              className="text-sm font-bold text-muted hover:text-foreground transition-colors"
+                className="text-sm font-bold text-muted hover:text-foreground transition-colors cursor-pointer"
             >
               Sign In
             </button>
           )}
-          <a
-            href="#demo"
-            className="hidden sm:inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-accent text-white text-xs font-bold tracking-wide hover:bg-accent/90 transition-all hover:shadow-[0_0_24px_rgba(0,194,203,0.35)] active:scale-95"
+
+          <Link
+            to="#demo"
+            className="flex items-center gap-2 text-sm font-semibold text-white bg-slate-900 dark:bg-emerald-600 px-5 py-2.5 rounded-full hover:bg-slate-800 dark:hover:bg-emerald-500 transition-all shadow-sm"
           >
             Request Demo
             <svg
@@ -119,7 +120,7 @@ export default function Header() {
             >
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
-          </a>
+          </Link>
         </div>
       </div>
     </nav>
