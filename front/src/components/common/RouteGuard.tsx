@@ -2,6 +2,7 @@ import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import MainLayout from "./MainLayout";
 import { useAuth } from "@/src/auth/AuthContext";
+import ErrorPage from "@/src/components/ErrorPage";
 
 interface RouteGuardProps {
   children: React.ReactNode;
@@ -21,9 +22,12 @@ function matchPublicRoute(path: string, patterns: string[]) {
 }
 
 export function RouteGuard({ children }: RouteGuardProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, authCheckError, refreshMe } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const isItemDetailsRoute = /^\/inventory\/medicines\/[^/]+$/.test(
+    location.pathname,
+  );
 
   useEffect(() => {
     if (loading) return;
@@ -31,10 +35,15 @@ export function RouteGuard({ children }: RouteGuardProps) {
     const isPublic = matchPublicRoute(location.pathname, PUBLIC_ROUTES);
 
     // Only redirect if not on login already
-    if (!user && !isPublic && location.pathname !== "/login") {
+    if (
+      !user &&
+      !authCheckError &&
+      !isPublic &&
+      location.pathname !== "/login"
+    ) {
       navigate("/login", { state: { from: location.pathname }, replace: true });
     }
-  }, [user, loading, location.pathname, navigate]);
+  }, [user, loading, authCheckError, location.pathname, navigate]);
 
   if (loading) {
     return (
@@ -44,5 +53,21 @@ export function RouteGuard({ children }: RouteGuardProps) {
     );
   }
 
-  return <MainLayout>{children}</MainLayout>;
+  if (authCheckError) {
+    return (
+      <ErrorPage
+        title="Unable to verify your session"
+        message={authCheckError}
+        onRetry={() => {
+          void refreshMe();
+        }}
+      />
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return <MainLayout fullWidth={isItemDetailsRoute}>{children}</MainLayout>;
 }

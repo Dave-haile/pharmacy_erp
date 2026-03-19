@@ -24,7 +24,7 @@ class Inventory(models.Model):
 
     def __str__(self):
         return f"{self.medicine.name} - Batch {self.batch_number}"
-    
+
     class Meta:
         db_table = 'Inventory'
         verbose_name_plural = 'Inventory'

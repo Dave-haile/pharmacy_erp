@@ -1,4 +1,5 @@
 import { ToastProvider } from "@/src/hooks/useToast";
+import { ConfirmDialogProvider } from "@/src/hooks/useConfirmDialog";
 import React from "react";
 import { HelmetProvider, Helmet } from "react-helmet-async";
 import { ThemeProvider } from "../context/ThemeContext";
@@ -23,15 +24,17 @@ const PageMeta = ({
 
 export const AppWrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={queryClient}>
-  <ToastProvider>
-    <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <HelmetProvider>{children}</HelmetProvider>
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeProvider>
-  </ToastProvider>
+    <ToastProvider>
+      <ConfirmDialogProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <HelmetProvider>{children}</HelmetProvider>
+            </BrowserRouter>
+          </AuthProvider>
+        </ThemeProvider>
+      </ConfirmDialogProvider>
+    </ToastProvider>
   </QueryClientProvider>
 );
 

@@ -6,6 +6,7 @@ import React, {
   useMemo,
   useState,
 } from "react";
+import axios from "axios";
 import api from "../services/api";
 import { useToast } from "../hooks/useToast";
 
@@ -20,6 +21,7 @@ export type BackendUser = {
 type AuthContextValue = {
   user: BackendUser | null;
   loading: boolean;
+  authCheckError: string | null;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
@@ -30,76 +32,92 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<BackendUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authCheckError, setAuthCheckError] = useState<string | null>(null);
   const { showError } = useToast();
 
-  // ✅ run once on app load
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await api.get<BackendUser>("/api/me/");
-        setUser(res.data);
-      } catch (_err) {
-        setUser(null);
-        // Don't show error toast on initial load to prevent dependency cycles
-      }
-      setLoading(false);
-    })();
+  const isUnauthorizedAuthError = useCallback((error: unknown) => {
+    return (
+      axios.isAxiosError(error) &&
+      [401, 403].includes(error.response?.status ?? 0)
+    );
   }, []);
 
-  // ✅ fetch current logged-in user
+  const getAuthCheckErrorMessage = useCallback((error: unknown) => {
+    if (!axios.isAxiosError(error)) {
+      return "We couldn't verify your session. Please try again.";
+    }
+
+    if (!error.response) {
+      return "The server is unreachable. Please check your connection and try again.";
+    }
+
+    return (
+      error.response.data?.message ||
+      error.response.data?.error ||
+      "We couldn't verify your session because the server returned an unexpected error."
+    );
+  }, []);
+
   const refreshMe = useCallback(async () => {
+    setLoading(true);
+
     try {
       const res = await api.get<BackendUser>("/api/me/");
       setUser(res.data);
-    } catch (err) {
-      setUser(null);
-      // Don't show error toast for 401 as it will be handled by interceptor
-      if (err.response?.status !== 401) {
-        console.error("Failed to fetch user information");
+      setAuthCheckError(null);
+    } catch (error) {
+      if (isUnauthorizedAuthError(error)) {
+        setUser(null);
+        setAuthCheckError(null);
+      } else {
+        setAuthCheckError(getAuthCheckErrorMessage(error));
       }
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }, [getAuthCheckErrorMessage, isUnauthorizedAuthError]);
 
-  // ✅ login function
+  useEffect(() => {
+    void refreshMe();
+  }, [refreshMe]);
+
   const login = useCallback(
     async (email: string, password: string) => {
       try {
         const response = await api.post(
           "/api/login/",
           { email, password },
-          { withCredentials: true }, // ensures cookie is sent
+          { withCredentials: true },
         );
 
         console.log("Login response:", response);
 
-        // refresh user info after login
         await refreshMe();
       } catch (err) {
-        // Show error toast for login failures
-        const errorMessage =
-          err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Login failed. Please check your credentials.";
+        const errorMessage = axios.isAxiosError(err)
+          ? err.response?.data?.message ||
+            err.response?.data?.error ||
+            "Login failed. Please check your credentials."
+          : "Login failed. Please check your credentials.";
         showError(errorMessage);
-        throw err; // Re-throw to let calling component handle if needed
+        throw err;
       }
     },
     [refreshMe, showError],
   );
 
-  // ✅ logout function
   const logout = useCallback(async () => {
     try {
       await api.post("/api/logout/", undefined, { withCredentials: true });
     } finally {
       setUser(null);
+      setAuthCheckError(null);
     }
   }, []);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ user, loading, login, logout, refreshMe }),
-    [user, loading, login, logout, refreshMe],
+    () => ({ user, loading, authCheckError, login, logout, refreshMe }),
+    [user, loading, authCheckError, login, logout, refreshMe],
   );
 
   return (

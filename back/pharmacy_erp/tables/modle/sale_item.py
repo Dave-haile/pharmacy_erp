@@ -3,6 +3,7 @@
 from django.db import models
 from .sale import Sale
 from .medicine import Medicine
+from .batches import Batches
 
 class SaleItem(models.Model):
     sale = models.ForeignKey(
@@ -17,6 +18,11 @@ class SaleItem(models.Model):
     )
 
     quantity = models.PositiveIntegerField()
+    batch_id = models.ForeignKey(
+        'Batches',
+        on_delete=models.PROTECT,
+        related_name='sale_items'
+    )
     price_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
 
     subtotal = models.DecimalField(max_digits=12, decimal_places=2)
@@ -28,5 +34,5 @@ class SaleItem(models.Model):
         db_table = 'SaleItem'
         verbose_name_plural = 'Sale Items'
         indexes = [
-            models.Index(fields=['sale', 'medicine']),
+            models.Index(fields=['sale', 'medicine', 'batch_id']),
         ]

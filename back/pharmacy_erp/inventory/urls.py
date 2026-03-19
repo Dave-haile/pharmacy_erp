@@ -1,13 +1,36 @@
 from django.urls import path
-from .views import dashboard_summary, medicines_list, medicine_categories_list, medicine_detail, medicine_detail_by_naming_series, supplier_list, medicines_create, medicines_update
+from .views import (
+    dashboard_summary,
+    medicines_list,
+    medicine_categories_list,
+    medicine_detail,
+    medicine_detail_by_naming_series,
+    supplier_list,
+    medicines_create,
+    medicines_update,
+    medicine_logs,
+    medicines_delete,
+    stock_entries_list,
+    stock_entry_detail,
+    stock_entry_update,
+    stock_entry_submit,
+    stock_entries_create,
+)
 
 urlpatterns = [
     path("dashboard/stats/", dashboard_summary),
     path("medicines/", medicines_list),
     path("medicines/create/", medicines_create),
     path("medicines/update/<int:medicine_id>/", medicines_update),
+    path("medicines/delete/<int:medicine_id>/", medicines_delete),
     path("medicine-categories/", medicine_categories_list),
     path("medicines/<int:medicine_id>/", medicine_detail),
+    path("medicines/<int:medicine_id>/logs/", medicine_logs),
     path("medicines/by-naming-series/<str:naming_series>/", medicine_detail_by_naming_series),
     path('medicines/supplier/', supplier_list),
+    path("stock-entries/", stock_entries_list),
+    path("stock-entries/<int:stock_entry_id>/", stock_entry_detail),
+    path("stock-entries/<int:stock_entry_id>/update/", stock_entry_update),
+    path("stock-entries/<int:stock_entry_id>/submit/", stock_entry_submit),
+    path("stock-entries/create/", stock_entries_create),
 ]

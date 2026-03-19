@@ -5,10 +5,12 @@ import Inventory from "@/src/pages/Inventory";
 import ItemMaster from "@/src/pages/ItemMaster";
 import ItemGrouping from "@/src/pages/ItemGrouping";
 import BatchDetails from "@/src/pages/BatchDetails";
+import StockInItems from "@/src/pages/stock-entries/StockInItems";
 import Login from "@/src/pages/Login";
 import AIAnalysis from "@/src/pages/AIAnalysis";
 import CreateItem from "@/src/components/CreateItem";
 import ItemDetails from "@/src/components/ItemDetails";
+import StockEntry from "@/src/pages/stock-entries/StockEntry";
 import LandingPage from "@/src/pages/Landing/LandingPage";
 import { RouteGuard } from "../common/RouteGuard";
 import NotFound from "@/src/pages/NotFound";
@@ -65,6 +67,26 @@ const routes: RouteConfig[] = [
     ),
   },
   {
+    key: "stock-in-items",
+    name: "Stock In Items",
+    path: "/inventory/stock-entries",
+    element: (
+      <RouteGuard>
+        <StockInItems />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-entry",
+    name: "Stock Entry",
+    path: "/inventory/stock-entries/:postingNumber",
+    element: (
+      <RouteGuard>
+        <StockEntry />
+      </RouteGuard>
+    ),
+  },
+  {
     key: "items",
     name: "Items",
     path: "inventory/medicines",
@@ -77,7 +99,7 @@ const routes: RouteConfig[] = [
   {
     key: "create-item",
     name: "Create Item",
-    path: "inventory/medicines/new",
+    path: "inventory/medicines/new-medicine",
     element: (
       <RouteGuard>
         <CreateItem />
@@ -159,9 +181,9 @@ const routes: RouteConfig[] = [
     ),
   },
   {
-    key: 'logs',
+    key: "logs",
     name: "Audit Logs",
-    path: '/audit-logs',
+    path: "/audit-logs",
     element: (
       <RouteGuard>
         <AuditLogs />

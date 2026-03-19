@@ -31,6 +31,7 @@ interface DataTableProps<T> {
 const DataTable = <T extends object>({
   columns,
   data,
+  isLoading = false,
   filters,
   footer,
   onRowClick,
@@ -39,6 +40,7 @@ const DataTable = <T extends object>({
   onSelectChange,
   onSelectAll,
   emptyMessage = "No records found",
+  loadingMessage = "Loading records...",
   idField = "id" as keyof T,
   rowClassName,
   sortConfig,
@@ -114,7 +116,18 @@ const DataTable = <T extends object>({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/30">
-              {data.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td
+                    colSpan={columns.length + (selectable ? 1 : 0)}
+                    className="px-4 py-20 text-center"
+                  >
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-600">
+                      {loadingMessage}
+                    </p>
+                  </td>
+                </tr>
+              ) : data.length > 0 ? (
                 data.map((item, rowIdx) => (
                   <tr
                     key={String(item[idField]) || rowIdx}
@@ -129,7 +142,9 @@ const DataTable = <T extends object>({
                         <input
                           type="checkbox"
                           checked={selectedIds.has(String(item[idField]))}
-                          onChange={() => onSelectChange?.(String(item[idField]))}
+                          onChange={() =>
+                            onSelectChange?.(String(item[idField]))
+                          }
                           className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-emerald-500 focus:ring-emerald-500/20 cursor-pointer"
                         />
                       </td>

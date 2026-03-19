@@ -14,6 +14,7 @@ interface SearchableSelectProps {
   placeholder?: string;
   className?: string;
   triggerClassName?: string;
+  disabled?: boolean;
   onCreateNew?: () => void;
   createNewText?: string;
 }
@@ -26,6 +27,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   placeholder = "Search...",
   className = "",
   triggerClassName = "",
+  disabled = false,
   onCreateNew,
   createNewText = "Create new",
 }) => {
@@ -38,11 +40,12 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   if (options.length > 0) {
     stableOptionsRef.current = options;
   }
-  const displayOptions = options.length > 0 ? options : stableOptionsRef.current;
+  const displayOptions =
+    options.length > 0 ? options : stableOptionsRef.current;
 
   const selectedOption = React.useMemo(
     () => displayOptions.find((opt) => String(opt.value) === String(value)),
-    [displayOptions, value]
+    [displayOptions, value],
   );
 
   useEffect(() => {
@@ -62,8 +65,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
     return displayOptions.filter(
       (option) =>
         option.label.toLowerCase().includes(lower) ||
-        (option.subtitle &&
-          option.subtitle.toLowerCase().includes(lower))
+        (option.subtitle && option.subtitle.toLowerCase().includes(lower)),
     );
   }, [displayOptions, inputValue]);
 
@@ -82,15 +84,22 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   }, []);
 
   return (
-    <div className={`relative ${className} ${isOpen ? 'z-100' : 'z-0'}`} ref={dropdownRef}>
+    <div
+      className={`relative ${className} ${isOpen ? "z-[90]" : "z-0"}`}
+      ref={dropdownRef}
+    >
       {/* Main Input Field */}
       <div className="relative group">
         <input
           type="text"
-          value={inputValue}
+          disabled={disabled}
+          value={inputValue || ""}
           placeholder={placeholder}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            if (!disabled) setIsOpen(true);
+          }}
           onChange={(e) => {
+            if (disabled) return;
             const newValue = e.target.value;
             setInputValue(newValue);
             setIsOpen(true);
@@ -107,18 +116,28 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           onBlur={() => {
             setTimeout(() => setIsUserTyping(false), 100);
           }}
-          className={`w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium outline-none text-slate-900 dark:text-slate-100 shadow-sm focus:border-emerald-500 transition-all placeholder:text-slate-400 ${triggerClassName}`}
+          className={`w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium outline-none text-slate-900 dark:text-slate-100 shadow-sm focus:border-emerald-500 transition-all placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-70 ${triggerClassName}`}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-          <svg className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7" />
+          <svg
+            className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2.5"
+              d="M19 9l-7 7-7-7"
+            />
           </svg>
         </div>
       </div>
 
       {/* Dropdown: stays mounted when open so list content only swaps in place (no unmount flash) */}
-      {isOpen && (
-        <div className="min-w-[230px] custom-scrollbar absolute z-100 w-full mt-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+      {isOpen && !disabled && (
+        <div className="absolute z-[100] mt-1 max-h-60 min-w-[230px] w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 custom-scrollbar dark:border-slate-800 dark:bg-slate-900">
           <div className="p-1 space-y-0.5">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option) => (
@@ -130,13 +149,19 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                     setIsOpen(false);
                     setIsUserTyping(false);
                   }}
-                  className={`px-3 py-2 rounded-lg cursor-pointer transition-all group ${value === option.value
-                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30'
-                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent'
-                    }`}
+                  className={`px-3 py-2 rounded-lg cursor-pointer transition-all group ${
+                    value === option.value
+                      ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-900/30"
+                      : "hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent"
+                  }`}
                 >
-                  <div className={`text-[12px] font-bold tracking-tight ${value === option.value ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white'
-                    }`}>
+                  <div
+                    className={`text-[12px] font-bold tracking-tight ${
+                      value === option.value
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white"
+                    }`}
+                  >
                     {option.label}
                   </div>
                   {option.subtitle && (
@@ -148,7 +173,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
               ))
             ) : (
               <div className="px-3 py-4 text-center">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">No results found</p>
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                  No results found
+                </p>
               </div>
             )}
           </div>
@@ -162,10 +189,22 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
               className="p-1.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/50 cursor-pointer"
             >
               <div className="w-full py-1.5 px-3 rounded-lg bg-emerald-600/5 hover:bg-emerald-600/10 text-emerald-600 dark:text-emerald-500 text-[9px] font-black uppercase tracking-widest transition-all flex items-center justify-center space-x-2 border border-emerald-500/10">
-                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4" />
+                <svg
+                  className="w-2.5 h-2.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="3"
+                    d="M12 4v16m8-8H4"
+                  />
                 </svg>
-                <span>{createNewText} {inputValue ? `'${inputValue}'` : ""}</span>
+                <span>
+                  {createNewText} {inputValue ? `'${inputValue}'` : ""}
+                </span>
               </div>
             </div>
           )}

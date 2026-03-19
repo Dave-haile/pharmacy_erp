@@ -1,6 +1,5 @@
-
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart,
   Bar,
@@ -53,9 +52,15 @@ interface SectionProps {
   links: LinkItem[];
 }
 
-const CategorySection: React.FC<SectionProps> = ({ title, subtitle, accentColor, icon, links }) => {
+const CategorySection: React.FC<SectionProps> = ({
+  title,
+  subtitle,
+  accentColor,
+  icon,
+  links,
+}) => {
   const navigate = useNavigate();
-  
+
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
@@ -196,7 +201,12 @@ const InventoryHub: React.FC = () => {
       ),
       links: [
         { label: "Material Requests", path: "#", highlighted: true },
-        { label: "Warehouse Stock Entry", path: "#", highlighted: true },
+        {
+          label: "Warehouse Stock Entry",
+          path: "/inventory/stock-entries",
+          highlighted: true,
+          active: true,
+        },
         { label: "Delivery Notes", path: "#", highlighted: true },
         { label: "Goods Receiving Voucher", path: "#", active: true },
         { label: "Pick & Pack List", path: "#", highlighted: true },

@@ -13,3 +13,5 @@ from .GoodRecivingNoteItems import GoodRecivingNoteItem
 from .batches import Batches
 from .user_log import UserLog
 from .inventory_transactions import StockLedger
+from .stock_entry import StockEntry
+from .stock_entry_item import StockEntryItem

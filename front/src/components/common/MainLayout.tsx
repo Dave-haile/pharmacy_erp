@@ -3,7 +3,10 @@ import Sidebar from "../Sidebar";
 import Header from "../Header";
 import Breadcrumbs from "../Breadcrumbs";
 
-const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const MainLayout: React.FC<{
+  children: React.ReactNode;
+  fullWidth?: boolean;
+}> = ({ children, fullWidth = false }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -24,7 +27,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <Header onMenuClick={() => setIsMobileOpen(true)} />
         <Breadcrumbs />
 
-        <div className="max-w-6xl mx-auto p-2.5 md:p-5">{children}</div>
+        <div
+          className={`${fullWidth ? "w-full" : "max-w-6xl mx-auto"} p-2.5 md:p-5`}
+        >
+          {children}
+        </div>
       </main>
     </div>
   );

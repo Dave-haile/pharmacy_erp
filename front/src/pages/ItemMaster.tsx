@@ -8,6 +8,7 @@ import { MedicineItem } from "../types/types";
 import { useQuery } from "@tanstack/react-query";
 import { useCategories } from "../services/common";
 import { fetchSuppliers } from "../services/suppler";
+import Select from "../components/ui/SelectTag";
 
 const ItemMaster: React.FC = () => {
   const [items, setItems] = useState<MedicineItem[]>([]);
@@ -18,11 +19,13 @@ const ItemMaster: React.FC = () => {
     generic_name: string;
     category: string;
     supplier: string;
+    status: string;
   }>({
     name: "",
     generic_name: "",
     category: "",
     supplier: "",
+    status: "",
   });
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -220,14 +223,16 @@ const ItemMaster: React.FC = () => {
     },
   ];
 
+  const statusOptions = [
+    { label: "Draft", value: "Draft" },
+    { label: "Submitted", value: "Submitted" },
+  ];
+
   const Filters = (
-    <div className="flex justify-between gap-4">
+    <div className="grid grid-cols-2 gap-4 w-full items-start">
       <div className="flex-1">
-        <div className="flex flex-nowrap gap-3 min-w-max">
+        <div className="grid grid-cols-4 gap-3 min-w-max">
           <div className="space-y-1.5 min-w-[160px]">
-            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-              Product Name
-            </label>
             <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
               <input
                 type="text"
@@ -240,9 +245,6 @@ const ItemMaster: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1.5 min-w-[140px]">
-            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-              Generic Name
-            </label>
             <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
               <input
                 type="text"
@@ -255,9 +257,6 @@ const ItemMaster: React.FC = () => {
             </div>
           </div>
           <div className="space-y-1.5 min-w-[170px]">
-            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-              Medicine Category
-            </label>
             <SearchableSelect
               options={itemGroups}
               value={filters.category}
@@ -266,14 +265,11 @@ const ItemMaster: React.FC = () => {
               placeholder="Select Category"
               className="w-full"
               triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-              onCreateNew={() => navigate("/items/medicine-categories/new")}
+              onCreateNew={() => navigate("/inventory/medicine-categories/new")}
               createNewText="Add New Medicine Category"
             />
           </div>
           <div className="space-y-1.5 min-w-[170px]">
-            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">
-              Supplier
-            </label>
             <SearchableSelect
               options={supplierGroups}
               value={filters.supplier}
@@ -282,13 +278,54 @@ const ItemMaster: React.FC = () => {
               placeholder="Select Supplier"
               className="w-full"
               triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-              onCreateNew={() => navigate("/suppliers/medicine-suppliers/new")}
+              onCreateNew={() => navigate("/inventory/medicine-suppliers/new")}
               createNewText="Add New Medicine Supplier"
+            />
+          </div>
+          <div className="space-y-1.5 min-w-[170px]">
+            {/* <div className="relative">
+              <select
+                autoComplete="off"
+                name="status"
+                value={filters.status || ""}
+                onChange={handleFilterChange}
+                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all w-full appearance-none  pl-3 pr-9 text-[11px] font-mono font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 "
+              >
+                <option value="" disabled selected hidden className="text-gray-500">Status...</option>
+                <option value=""></option>
+                <option value="Draft">Draft</option>
+                <option value="Submitted">Submitted</option>
+              </select>
+              <svg
+                className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div> */}
+            <Select
+              options={statusOptions}
+              value={filters.status || ""}
+              placeholder="Status..."
+              allowEmpty
+              emptyLabel=""
+              onChange={(value) =>
+                setFilters((prev) => ({
+                  ...prev,
+                  status: value,
+                }))
+              }
             />
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-end pt-2">
+      <div className="flex items-center justify-end">
         <div className="flex items-center space-x-2">
           <button className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm">
             <svg
@@ -389,7 +426,7 @@ const ItemMaster: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={() => navigate("/inventory/medicines/new")}
+          onClick={() => navigate("/inventory/medicines/new-medicine")}
           className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-600/20 transition-all flex items-center space-x-2"
         >
           <svg

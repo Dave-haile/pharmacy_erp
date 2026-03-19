@@ -75,7 +75,7 @@ export interface MedicineItem {
   description: string;
   naming_series: string;
   is_active: boolean;
-  status: 'Draft' | 'Submitted';
+  status: "Draft" | "Submitted";
   created_at: string;
 }
 export interface Category {
@@ -96,8 +96,69 @@ export interface Supplier {
 
 export interface Log {
   log_id: number;
-  user: string;
   action: string;
   timestamp: string;
   details: string;
+  user_id: number;
+  username?: string | null;
+}
+
+export interface StockEntryItemInput {
+  medicine_id: number | null;
+  batch_number: string;
+  manufacturing_date: string;
+  expiry_date: string;
+  quantity: string;
+  unit_price: string;
+  reference: string;
+  notes: string;
+}
+
+export interface CreateStockEntry {
+  supplier_id: number | null;
+  invoice_number: string;
+  tax: string;
+  notes: string;
+  items: StockEntryItemInput[];
+}
+
+export interface StockEntrySummary {
+  id: number;
+  posting_number: string;
+  supplier_id: number;
+  supplier: string;
+  invoice_number: string;
+  item_count: number;
+  total_quantity: number;
+  total_cost: string;
+  tax: string;
+  grand_total: string;
+  status: "Draft" | "Posted" | "Cancelled";
+  status_key: "draft" | "posted" | "cancelled";
+  received_by: string;
+  received_by_id: number;
+  purchase_id: number | null;
+  goods_receiving_note_id: number | null;
+  notes: string;
+  posted_at: string;
+  updated_at: string;
+}
+
+export interface StockEntryDetailItem {
+  id: number;
+  medicine_id: number;
+  medicine_name: string;
+  batch_id: number | null;
+  batch_number: string;
+  quantity: number;
+  unit_price: string;
+  total_price: string;
+  manufacturing_date: string;
+  expiry_date: string;
+  reference: string;
+  notes: string;
+}
+
+export interface StockEntryDetail extends StockEntrySummary {
+  items: StockEntryDetailItem[];
 }

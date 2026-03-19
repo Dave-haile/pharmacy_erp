@@ -1,4 +1,4 @@
-import { CreateMedicine } from "../types/types";
+import { CreateMedicine, Log, MedicineItem } from "../types/types";
 import api from "./api";
 
 export const fetchMedicines = async (
@@ -9,6 +9,7 @@ export const fetchMedicines = async (
     generic_name: string;
     category: string;
     supplier: string;
+    status: string;
   },
 ) => {
   const params = new URLSearchParams({
@@ -30,9 +31,11 @@ export const fetchMedicines = async (
   if (filters.supplier) {
     params.append("supplier", filters.supplier);
   }
+  if (filters.status) {
+    params.append("status", filters.status);
+  }
 
   const res = await api.get(`/api/inventory/medicines/?${params.toString()}`);
-  console.log(res.data);
   return res.data;
 };
 
@@ -44,24 +47,30 @@ export const updateMedicine = async (
   id: string | number,
   medicine: Partial<CreateMedicine>,
 ) => {
-  const res = await api.put(
-    `/api/inventory/medicines/update/${id}/`,
-    medicine,
-  );
+  const res = await api.put(`/api/inventory/medicines/update/${id}/`, medicine);
   return res.data;
 };
 export const deleteMedicine = async (id: string) => {
-  const res = await api.delete(`/api/inventory/medicines/${id}/`);
+  const res = await api.delete(`/api/inventory/medicines/delete/${id}/`);
   return res.data;
 };
-export const fetchMedicineById = async (naming_series: string) => {
+export const fetchMedicineById = async (
+  naming_series: string,
+): Promise<MedicineItem> => {
   const res = await api.get(
     `/api/inventory/medicines/by-naming-series/${naming_series}/`,
   );
   return res.data;
 };
 
-export const fetchMedicineByNumericId = async (id: string) => {
+export const fetchMedicineByNumericId = async (
+  id: string | number,
+): Promise<MedicineItem> => {
   const res = await api.get(`/api/inventory/medicines/${id}/`);
   return res.data;
+};
+
+export const fetchMedicineLogs = async (medicineId: number | string) => {
+  const res = await api.get(`/api/inventory/medicines/${medicineId}/logs/`);
+  return (res.data?.results || []) as Log[];
 };

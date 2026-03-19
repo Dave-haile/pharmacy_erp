@@ -1,7 +1,6 @@
-
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../services/api";
 import SearchableSelect from "../components/SearchableSelect";
 
 // Simple in-memory cache for manufacturer data
@@ -208,8 +207,12 @@ const UnitConverterModal: React.FC<{
   );
 };
 
-const ManufacturerCell: React.FC<{ manufacturerId: string }> = ({ manufacturerId }) => {
-  const [data, setData] = useState<any>(manufacturerCache[manufacturerId] || null);
+const ManufacturerCell: React.FC<{ manufacturerId: string }> = ({
+  manufacturerId,
+}) => {
+  const [data, setData] = useState<any>(
+    manufacturerCache[manufacturerId] || null,
+  );
   const [loading, setLoading] = useState(!manufacturerCache[manufacturerId]);
 
   useEffect(() => {
@@ -281,15 +284,28 @@ const Inventory: React.FC = () => {
   const [visibleCount, setVisibleCount] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>(null);
-  const [converterModal, setConverterModal] = useState({ isOpen: false, qty: 0, unit: '' });
+  const [sortConfig, setSortConfig] = useState<{
+    key: string;
+    direction: "asc" | "desc";
+  } | null>(null);
+  const [converterModal, setConverterModal] = useState({
+    isOpen: false,
+    qty: 0,
+    unit: "",
+  });
   const [isExporting, setIsExporting] = useState(false);
   const [exportScope, setExportScope] = useState<"all" | "filtered">(
     "filtered",
   );
   const navigate = useNavigate();
 
-  const quickLinks = ['Item', 'Item Group', 'Product Bundle', 'Price List', 'Item Price'];
+  const quickLinks = [
+    "Item",
+    "Item Group",
+    "Product Bundle",
+    "Price List",
+    "Item Price",
+  ];
 
   useEffect(() => {
     const fetchInventory = async () => {
@@ -438,23 +454,30 @@ const Inventory: React.FC = () => {
   };
 
   const requestSort = (key: string) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+    let direction: "asc" | "desc" = "asc";
+    if (
+      sortConfig &&
+      sortConfig.key === key &&
+      sortConfig.direction === "asc"
+    ) {
+      direction = "desc";
     }
     setSortConfig({ key, direction });
   };
 
   const handleAIAnalyze = (item: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    navigate('/ai-insights', { state: { item } });
+    navigate("/ai-insights", { state: { item } });
   };
 
   const handleViewDetails = (id: string) => {
     navigate(`/inventory/${id}`);
   };
 
-  const handleSelectItem = (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelectItem = (
+    id: string,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     e.stopPropagation();
     const newSelected = new Set(selectedIds);
     if (newSelected.has(id)) newSelected.delete(id);
@@ -473,7 +496,7 @@ const Inventory: React.FC = () => {
     setConverterModal({ isOpen: true, qty, unit });
   };
 
-  const exportToFormat = (format: 'csv' | 'excel', itemsToExport: any[]) => {
+  const exportToFormat = (format: "csv" | "excel", itemsToExport: any[]) => {
     setIsExporting(true);
     setTimeout(() => {
       setIsExporting(false);
@@ -503,7 +526,10 @@ const Inventory: React.FC = () => {
             <span>{link}</span>
           </button>
         ))}
-        <button className="whitespace-nowrap px-2.5 py-1 bg-slate-900 dark:bg-emerald-600 rounded-lg text-[9px] font-bold text-white shadow-lg shadow-slate-900/10 dark:shadow-emerald-900/20">
+        <button
+          onClick={() => navigate("/inventory/stock-entries")}
+          className="whitespace-nowrap px-2.5 py-1 bg-slate-900 dark:bg-emerald-600 rounded-lg text-[9px] font-bold text-white shadow-lg shadow-slate-900/10 dark:shadow-emerald-900/20"
+        >
           + New Entry
         </button>
       </div>

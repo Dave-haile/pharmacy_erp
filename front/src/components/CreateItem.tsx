@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Save,
   X,
@@ -8,7 +8,6 @@ import {
   DollarSign,
   Barcode,
   Info,
-  Activity,
   ChevronRight,
   Beaker,
   Boxes,
@@ -16,10 +15,13 @@ import {
 import SearchableSelect from "../components/SearchableSelect";
 import { useCategories, useSuppliers } from "../services/common";
 import { useToast } from "../hooks/useToast";
-import { CreateMedicine } from "../types/types";
+import { useConfirmDialog } from "../hooks/useConfirmDialog";
+import { CreateMedicine, MedicineItem } from "../types/types";
 import { createMedicine } from "../services/medicines";
 
 const CreateItem: React.FC = () => {
+  const location = useLocation();
+  const duplicateItem = location.state?.duplicateItem as MedicineItem | null;
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categoryInputSearch, setCategoryInputSearch] = useState("");
@@ -39,17 +41,85 @@ const CreateItem: React.FC = () => {
   const { itemGroups } = useCategories(categoryInputSearch);
   const { supplierGroups } = useSuppliers(supplierInputSearch);
   const { showError, showSuccess } = useToast();
+  const { confirm } = useConfirmDialog();
+
+  const validateMedicineForm = (data: CreateMedicine): string[] => {
+    const errors: string[] = [];
+
+    const name = data.name.trim();
+    if (!name) {
+      errors.push("Commercial name is required.");
+    } else if (name.length > 200) {
+      errors.push("Commercial name must be at most 200 characters.");
+    }
+
+    const generic = data.generic_name.trim();
+    if (generic.length > 200) {
+      errors.push("Generic name must be at most 200 characters.");
+    }
+
+    if (data.category_id == null) {
+      errors.push("Material category is required.");
+    }
+
+    const barcode = data.barcode.trim();
+    if (!barcode) {
+      errors.push("Global barcode (GTIN) is required.");
+    } else if (barcode.length > 100) {
+      errors.push("Barcode must be at most 100 characters.");
+    }
+
+    const cost = Number(data.cost_price);
+    if (!data.cost_price) {
+      errors.push("Unit cost is required.");
+    } else if (!Number.isFinite(cost) || cost <= 0) {
+      errors.push("Unit cost must be a positive number.");
+    }
+
+    const selling = Number(data.selling_price);
+    if (!data.selling_price) {
+      errors.push("Market price is required.");
+    } else if (!Number.isFinite(selling) || selling <= 0) {
+      errors.push("Market price must be a positive number.");
+    }
+
+    return errors;
+  };
+
+  useEffect(() => {
+    if (!duplicateItem) return;
+
+    setFormData({
+      name: duplicateItem.name + " (Copy)",
+      generic_name: duplicateItem.generic_name ?? "",
+      barcode: "", // reset unique field
+      category_id: duplicateItem.category_id ?? null,
+      supplier_id: duplicateItem.supplier_id ?? null,
+      cost_price: duplicateItem.cost_price ?? "",
+      selling_price: duplicateItem.selling_price ?? "",
+      description: duplicateItem.description ?? "",
+      is_active: duplicateItem.is_active ?? true,
+    });
+  }, [duplicateItem]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
 
-    // Frontend validation to match backend constraints
-    if (formData.category_id == null) {
-      showError("Please select a material category before saving.");
-      setIsSubmitting(false);
+    const errors = validateMedicineForm(formData);
+    if (errors.length > 0) {
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Register Item",
+        message:
+          "Please resolve the following issues before continuing:\n\n" +
+          errors.map((e) => `• ${e}`).join("\n"),
+        confirmLabel: "Review Form",
+      });
       return;
     }
+
+    setIsSubmitting(true);
 
     try {
       console.log(formData);
@@ -136,12 +206,12 @@ const CreateItem: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+    <div className="w-full mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
       {/* Header Section */}
       <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div className="flex items-start space-x-4">
           <button
-            onClick={() => navigate("/inventory/medicines")}
+            onClick={() => navigate(-1)}
             className="mt-1 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-slate-500 dark:text-slate-400 shadow-sm group"
           >
             <ChevronRight className="w-4 h-4 rotate-180 group-hover:-translate-x-0.5 transition-transform" />
@@ -168,7 +238,7 @@ const CreateItem: React.FC = () => {
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => navigate("/inventory/medicines")}
+            onClick={() => navigate(-1)}
             className="flex items-center space-x-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-black text-slate-500 uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
           >
             <X className="w-4 h-4" />
@@ -193,7 +263,7 @@ const CreateItem: React.FC = () => {
 
       <form
         onSubmit={handleSubmit}
-        className="grid grid-cols-1 lg:grid-cols-12 gap-10"
+        className="grid grid-cols-1 gap-10"
       >
         {/* Main Content Area */}
         <div className="lg:col-span-8 space-y-10">
@@ -418,84 +488,6 @@ const CreateItem: React.FC = () => {
                   />
                 </div>
               </section>
-            </div>
-          </div>
-        </div>
-
-        {/* Sidebar Actions */}
-        <div className="lg:col-span-4 space-y-8">
-          <div className="bg-slate-900 dark:bg-white rounded-2xl shadow-2xl p-8 text-white dark:text-slate-900 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 dark:bg-blue-500/5 blur-[60px] rounded-full -translate-y-1/2 translate-x-1/2 group-hover:scale-110 transition-transform duration-700" />
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-6 relative z-10">
-              Registry Actions
-            </h3>
-            <div className="space-y-4 relative z-10">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl flex items-center justify-center space-x-3 shadow-emerald-600/20 disabled:opacity-50"
-              >
-                {isSubmitting ? (
-                  <div className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
-                ) : (
-                  <Save className="w-3.5 h-3.5" />
-                )}
-                <span>
-                  {isSubmitting ? "Synchronizing..." : "Complete Registration"}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => navigate("/inventory/medicines")}
-                className="w-full bg-slate-800 dark:bg-slate-100 text-slate-300 dark:text-slate-600 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-700 dark:hover:bg-slate-200 transition-all border border-slate-700 dark:border-slate-200 flex items-center justify-center space-x-3"
-              >
-                <X className="w-3.5 h-3.5" />
-                <span>Cancel & Return</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-8">
-            <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6">
-              Compliance & Status
-            </h3>
-            <div className="flex items-center space-x-4 p-4 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800">
-              <div className="bg-slate-200 dark:bg-slate-700 p-2 rounded-xl text-slate-400 shadow-lg">
-                <Activity className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-tight text-slate-600 dark:text-slate-400">
-                  Pending Review
-                </p>
-                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500">
-                  Awaiting GMP Validation
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-8">
-            <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">
-              Registry Metadata
-            </h3>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center pb-3 border-b border-slate-50 dark:border-slate-800">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Entry Date
-                </span>
-                <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-400">
-                  {new Date().toLocaleDateString()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  System ID
-                </span>
-                <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-400">
-                  #AUTO-GEN
-                </span>
-              </div>
             </div>
           </div>
         </div>

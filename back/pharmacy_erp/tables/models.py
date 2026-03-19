@@ -15,4 +15,6 @@ from tables.modle import (
     Batches,
     UserLog,
     StockLedger,
+    StockEntry,
+    StockEntryItem,
 )

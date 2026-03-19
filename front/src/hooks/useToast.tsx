@@ -27,7 +27,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = Date.now().toString();
     const newToast: ToastMessage = { id, message, type };
-    
+
     setToasts(prev => [...prev, newToast]);
   }, []);
 
@@ -58,7 +58,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed top-4 right-4 z-50 space-y-2">
+      <div className="fixed bottom-4 right-4 z-120 space-y-2">
         {toasts.map((toast) => (
           <Toast
             key={toast.id}
