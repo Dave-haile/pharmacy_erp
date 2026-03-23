@@ -12,6 +12,8 @@ interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   isLoading?: boolean;
+  isRefreshing?: boolean;
+  onRefresh?: () => void | Promise<unknown>;
   filters?: React.ReactNode;
   footer?: React.ReactNode;
   onRowClick?: (item: T) => void;
@@ -26,12 +28,16 @@ interface DataTableProps<T> {
   sortConfig?: { key: keyof T; direction: "asc" | "desc" } | null;
   onSort?: (key: keyof T) => void;
   headerRight?: React.ReactNode;
+  refreshMessage?: string;
+  refreshLabel?: string;
 }
 
 const DataTable = <T extends object>({
   columns,
   data,
   isLoading = false,
+  isRefreshing = false,
+  onRefresh,
   filters,
   footer,
   onRowClick,
@@ -46,8 +52,13 @@ const DataTable = <T extends object>({
   sortConfig,
   onSort,
   headerRight,
+  refreshMessage = "Refreshing",
+  refreshLabel = "Refresh",
 }: DataTableProps<T>) => {
   const allSelected = data.length > 0 && selectedIds.size === data.length;
+  const showInitialLoadingState = isLoading && data.length === 0;
+  const showRefreshState = isRefreshing && data.length > 0;
+  const isRefreshDisabled = isLoading || isRefreshing;
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm dark:shadow-2xl flex flex-col transition-colors">
@@ -60,6 +71,40 @@ const DataTable = <T extends object>({
 
       {/* Table Section */}
       <div className="flex-1 min-h-[300px] relative">
+        {(showRefreshState || onRefresh) && (
+          <div className="absolute right-4 top-4 z-10 flex items-center gap-2">
+            {showRefreshState && (
+              <div className="pointer-events-none inline-flex items-center rounded-full border border-sky-200 bg-sky-50/95 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-sky-700 shadow-sm backdrop-blur dark:border-sky-900/40 dark:bg-sky-950/80 dark:text-sky-300">
+                {refreshMessage}
+              </div>
+            )}
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={() => {
+                  void onRefresh();
+                }}
+                disabled={isRefreshDisabled}
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white/95 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-slate-600 shadow-sm backdrop-blur transition-all hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-800 dark:bg-slate-900/95 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:text-white"
+              >
+                <svg
+                  className={`h-3 w-3 ${isRefreshDisabled ? "animate-spin" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M4 4v5h5M20 20v-5h-5M5.64 18.36A9 9 0 1018.36 5.64L20 7.27M4 16.73l1.64 1.63"
+                  />
+                </svg>
+                <span>{refreshLabel}</span>
+              </button>
+            )}
+          </div>
+        )}
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -115,8 +160,11 @@ const DataTable = <T extends object>({
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/30">
-              {isLoading ? (
+            <tbody
+              className={`divide-y divide-slate-100 transition-opacity duration-300 dark:divide-slate-800/30 ${showRefreshState ? "opacity-70" : "opacity-100"
+                }`}
+            >
+              {showInitialLoadingState ? (
                 <tr>
                   <td
                     colSpan={columns.length + (selectable ? 1 : 0)}

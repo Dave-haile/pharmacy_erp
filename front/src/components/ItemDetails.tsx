@@ -20,14 +20,23 @@ import {
   BarChart3,
   Activity,
   ShieldCheck,
-  MoreVertical, Printer, Clipboard, Share2, Download
+  MoreVertical,
+  Printer,
+  Clipboard,
+  Share2,
+  Download,
 } from "lucide-react";
 import SearchableSelect from "./SearchableSelect";
 import { useCategories, useSuppliers } from "../services/common";
 import { useToast } from "../hooks/useToast";
 import { useConfirmDialog } from "../hooks/useConfirmDialog";
-import { deleteMedicine, fetchMedicineById, fetchMedicineLogs, updateMedicine } from "../services/medicines";
-
+import {
+  deleteMedicine,
+  fetchMedicineById,
+  fetchMedicineLogs,
+  updateMedicine,
+} from "../services/medicines";
+import DocumentActivityLog from "./common/DocumentActivityLog";
 
 const ItemDetails: React.FC = () => {
   const { naming_series } = useParams<{ naming_series: string }>();
@@ -130,7 +139,11 @@ const ItemDetails: React.FC = () => {
     if (!detailsObj) return [`${actor}: ${log.details}`];
 
     const changesRaw = detailsObj["changes"];
-    if (changesRaw && typeof changesRaw === "object" && !Array.isArray(changesRaw)) {
+    if (
+      changesRaw &&
+      typeof changesRaw === "object" &&
+      !Array.isArray(changesRaw)
+    ) {
       const changes = changesRaw as Record<
         string,
         { from?: unknown; to?: unknown }
@@ -164,7 +177,9 @@ const ItemDetails: React.FC = () => {
     const pairs = Object.entries(detailsObj).map(
       ([k, v]) => `${fieldLabel(k)}=${prettyValue(v)}`,
     );
-    return pairs.length ? [`${actor}: ${pairs.join(" • ")}`] : [`${actor}: ${log.action}`];
+    return pairs.length
+      ? [`${actor}: ${pairs.join(" • ")}`]
+      : [`${actor}: ${log.action}`];
   };
 
   const handleInputChange = (
@@ -209,14 +224,22 @@ const ItemDetails: React.FC = () => {
     }
 
     const cost = Number(data.cost_price);
-    if (data.cost_price === undefined || data.cost_price === null || data.cost_price === "") {
+    if (
+      data.cost_price === undefined ||
+      data.cost_price === null ||
+      data.cost_price === ""
+    ) {
       errors.push("Unit cost is required.");
     } else if (!Number.isFinite(cost) || cost <= 0) {
       errors.push("Unit cost must be a positive number.");
     }
 
     const selling = Number(data.selling_price);
-    if (data.selling_price === undefined || data.selling_price === null || data.selling_price === "") {
+    if (
+      data.selling_price === undefined ||
+      data.selling_price === null ||
+      data.selling_price === ""
+    ) {
       errors.push("Market price is required.");
     } else if (!Number.isFinite(selling) || selling <= 0) {
       errors.push("Market price must be a positive number.");
@@ -291,13 +314,12 @@ const ItemDetails: React.FC = () => {
     if (!item) return;
 
     navigate("/inventory/medicines/new-medicine", {
-      state: { duplicateItem: item }
+      state: { duplicateItem: item },
     });
   };
 
   const handleCopyToClipboard = async () => {
     if (!item) return;
-
   };
 
   const handlePrint = async () => {
@@ -386,10 +408,11 @@ const ItemDetails: React.FC = () => {
                 </span>
               ) : (
                 <span
-                  className={`px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] rounded-md border ${(item.status || "Draft") === "Submitted"
-                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-                    : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                    }`}
+                  className={`px-2 py-1 text-[8px] font-black uppercase tracking-[0.2em] rounded-md border ${
+                    (item.status || "Draft") === "Submitted"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                  }`}
                 >
                   {item.status || "Draft"}
                 </span>
@@ -425,7 +448,6 @@ const ItemDetails: React.FC = () => {
           ) : null}
           {!isEditing ? (
             <div className="flex items-center space-x-3 relative">
-
               <button
                 key="edit-btn"
                 onClick={() => {
@@ -440,54 +462,64 @@ const ItemDetails: React.FC = () => {
                 <button
                   key="actions-btn"
                   onClick={() => setIsActionsOpen(!isActionsOpen)}
-                  className={`p-2.5 rounded-xl border transition-all ${isActionsOpen
-                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm'
-                    }`}
+                  className={`p-2.5 rounded-xl border transition-all ${
+                    isActionsOpen
+                      ? "bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
+                      : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm"
+                  }`}
                 >
                   <MoreVertical className="w-5 h-5" />
                 </button>
 
                 {isActionsOpen && (
                   <>
-                    <div onClick={() => setIsActionsOpen(false)} className="fixed inset-0 z-40" />
+                    <div
+                      onClick={() => setIsActionsOpen(false)}
+                      className="fixed inset-0 z-40"
+                    />
                     <div className="absolute right-0 mt-3 w-64 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-50 overflow-hidden">
                       <div className="p-2 space-y-1">
                         <button
                           onClick={() => handleDuplicate()}
-                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
+                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
+                        >
                           <Copy className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
                           <span>Duplicate</span>
                         </button>
                         <button
                           onClick={() => handleCopyToClipboard()}
-                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
+                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
+                        >
                           <Clipboard className="w-4 h-4 text-slate-400 group-hover:text-emerald-500 transition-colors" />
                           <span>Copy to Clipboard</span>
                         </button>
                         <button
                           onClick={() => handlePrint()}
-                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
+                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
+                        >
                           <Printer className="w-4 h-4 text-slate-400 group-hover:text-purple-500 transition-colors" />
                           <span>Print</span>
                         </button>
                         <div className="h-px bg-slate-100 dark:bg-slate-800 my-1 mx-2" />
                         <button
                           onClick={() => handleShare()}
-                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
+                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
+                        >
                           <Share2 className="w-4 h-4 text-slate-400 group-hover:text-blue-400 transition-colors" />
                           <span>Share Record</span>
                         </button>
                         <button
                           onClick={() => handleExport()}
-                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
+                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group"
+                        >
                           <Download className="w-4 h-4 text-slate-400 group-hover:text-amber-500 transition-colors" />
                           <span>Export</span>
                         </button>
                         <div className="h-px bg-slate-100 dark:bg-slate-800 my-1 mx-2" />
                         <button
                           onClick={() => handleDelete()}
-                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all group">
+                          className="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-left text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all group"
+                        >
                           <Trash2 className="w-4 h-4 text-red-400 group-hover:text-red-600 transition-colors" />
                           <span>Delete</span>
                         </button>
@@ -669,7 +701,7 @@ const ItemDetails: React.FC = () => {
                         placeholder="Select Supplier"
                         className="w-full"
                         triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-                        onCreateNew={() => navigate("/suppliers/new")}
+                        onCreateNew={() => navigate("/inventory/suppliers/new")}
                         createNewText="Add New Supplier"
                       />
                     </div>
@@ -892,7 +924,9 @@ const ItemDetails: React.FC = () => {
                       <span>Created At</span>
                     </label>
                     <p className="text-base font-bold text-slate-800 dark:text-slate-200">
-                      {item.created_at ? new Date(item.created_at).toLocaleString() : "N/A"}
+                      {item.created_at
+                        ? new Date(item.created_at).toLocaleString()
+                        : "N/A"}
                     </p>
                   </div>
                 </div>
@@ -914,119 +948,132 @@ const ItemDetails: React.FC = () => {
             </div>
           )}
 
-          {/* Audit Logs */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-8">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center space-x-3">
-                <Clock className="w-5 h-5 text-emerald-500" />
-                <span>Registry Audit Trail</span>
-              </h3>
-              <button
-                onClick={() => navigate("/audit-logs")}
-                className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest hover:underline"
-              >
-                Full History
-              </button>
-            </div>
-            <div className="space-y-6">
-              {isLogsLoading ? (
-                <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                  <p className="text-xs font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
-                    Loading audit entries...
-                  </p>
+          <DocumentActivityLog
+            logs={logs}
+            isLoading={isLogsLoading}
+            onViewAll={() => navigate("/audit-logs")}
+            title="Registry Audit Trail"
+            description="Recent changes made only to this medicine."
+          />
+          {false && (
+            <>
+              {/* Audit Logs */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-8">
+                <div className="flex justify-between items-center mb-8">
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center space-x-3">
+                    <Clock className="w-5 h-5 text-emerald-500" />
+                    <span>Registry Audit Trail</span>
+                  </h3>
+                  <button
+                    onClick={() => navigate("/audit-logs")}
+                    className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest hover:underline"
+                  >
+                    Full History
+                  </button>
                 </div>
-              ) : logs.length > 0 ? (
-                logs.map((log, idx) => {
-                  const when = parseLogTimestamp(log.timestamp);
-                  const detailsObj = parseLogDetails(log.details);
-                  const detailLines = formatLogDetailsText(log, detailsObj);
-                  const isCreate = /created/i.test(log.action);
-                  const isUpdate = /update/i.test(log.action);
-                  const dotColor = isCreate
-                    ? "bg-emerald-500"
-                    : isUpdate
-                      ? "bg-blue-500"
-                      : "bg-slate-400";
-
-                  return (
-                    <div key={log.log_id} className="relative pl-8 group">
-                      {/* Timeline Line */}
-                      {idx < logs.length - 1 && (
-                        <div className="absolute left-[11px] top-6 bottom-0 w-px bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-500/20 transition-colors" />
-                      )}
-
-                      {/* Timeline Dot */}
-                      <div
-                        className={`absolute left-0 top-1.5 w-6 h-6 rounded-full border-4 border-white dark:border-slate-900 shadow-sm flex items-center justify-center z-10 ${dotColor}`}
-                      >
-                        {isCreate ? (
-                          <Package className="w-2 h-2 text-white" />
-                        ) : isUpdate ? (
-                          <Edit3 className="w-2 h-2 text-white" />
-                        ) : (
-                          <Info className="w-2 h-2 text-white" />
-                        )}
-                      </div>
-
-                      <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl p-4 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center space-x-3">
-                            <span className="text-[10px] font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">
-                              {log.action}
-                            </span>
-                            <span className="w-1 h-1 bg-slate-300 dark:bg-slate-700 rounded-full" />
-                            <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                              {when
-                                ? when.toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                                : "—"}
-                            </span>
-                          </div>
-                          <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                            {when
-                              ? when.toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                                year: "numeric",
-                              })
-                              : log.timestamp}
-                          </span>
-                        </div>
-                        <div className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed mb-3 space-y-1">
-                          {detailLines.map((line, i) => (
-                            <p key={i} className="wrap-break-word">
-                              {line}
-                            </p>
-                          ))}
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            <div className="w-5 h-5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center text-[8px] font-black text-emerald-600">
-                              {(log.username || String(log.user_id)).charAt(0)}
-                            </div>
-                            <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
-                              {log.username || `User #${log.user_id}`}
-                            </p>
-                          </div>
-                          <div className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[8px] font-bold text-slate-400 uppercase tracking-widest">
-                            Log #{log.log_id}
-                          </div>
-                        </div>
-                      </div>
+                <div className="space-y-6">
+                  {isLogsLoading ? (
+                    <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <p className="text-xs font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+                        Loading audit entries...
+                      </p>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-                  <p className="text-xs font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
-                    No audit entries found
-                  </p>
+                  ) : logs.length > 0 ? (
+                    logs.map((log, idx) => {
+                      const when = parseLogTimestamp(log.timestamp);
+                      const detailsObj = parseLogDetails(log.details);
+                      const detailLines = formatLogDetailsText(log, detailsObj);
+                      const isCreate = /created/i.test(log.action);
+                      const isUpdate = /update/i.test(log.action);
+                      const dotColor = isCreate
+                        ? "bg-emerald-500"
+                        : isUpdate
+                          ? "bg-blue-500"
+                          : "bg-slate-400";
+
+                      return (
+                        <div key={log.log_id} className="relative pl-8 group">
+                          {/* Timeline Line */}
+                          {idx < logs.length - 1 && (
+                            <div className="absolute left-[11px] top-6 bottom-0 w-px bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-500/20 transition-colors" />
+                          )}
+
+                          {/* Timeline Dot */}
+                          <div
+                            className={`absolute left-0 top-1.5 w-6 h-6 rounded-full border-4 border-white dark:border-slate-900 shadow-sm flex items-center justify-center z-10 ${dotColor}`}
+                          >
+                            {isCreate ? (
+                              <Package className="w-2 h-2 text-white" />
+                            ) : isUpdate ? (
+                              <Edit3 className="w-2 h-2 text-white" />
+                            ) : (
+                              <Info className="w-2 h-2 text-white" />
+                            )}
+                          </div>
+
+                          <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl p-4 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center space-x-3">
+                                <span className="text-[10px] font-black text-slate-900 dark:text-slate-100 uppercase tracking-widest">
+                                  {log.action}
+                                </span>
+                                <span className="w-1 h-1 bg-slate-300 dark:bg-slate-700 rounded-full" />
+                                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                  {when
+                                    ? when.toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
+                                    : "—"}
+                                </span>
+                              </div>
+                              <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                                {when
+                                  ? when.toLocaleDateString(undefined, {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    })
+                                  : log.timestamp}
+                              </span>
+                            </div>
+                            <div className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed mb-3 space-y-1">
+                              {detailLines.map((line, i) => (
+                                <p key={i} className="wrap-break-word">
+                                  {line}
+                                </p>
+                              ))}
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <div className="w-5 h-5 bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-100 dark:border-slate-700 flex items-center justify-center text-[8px] font-black text-emerald-600">
+                                  {(log.username || String(log.user_id)).charAt(
+                                    0,
+                                  )}
+                                </div>
+                                <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">
+                                  {log.username || `User #${log.user_id}`}
+                                </p>
+                              </div>
+                              <div className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-[8px] font-bold text-slate-400 uppercase tracking-widest">
+                                Log #{log.log_id}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="text-center py-12 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                      <p className="text-xs font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
+                        No audit entries found
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

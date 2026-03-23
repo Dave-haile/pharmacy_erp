@@ -1,1 +1,1 @@
-export { default } from "./StockEntryPage";
+export { default } from "./StockEntryDetails";

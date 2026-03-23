@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
@@ -25,11 +24,11 @@ const navItems = [
     label: "Quality Control",
     icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
   },
-  {
-    path: "/sales",
-    label: "Sales & Orders",
-    icon: "M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z",
-  },
+  // {
+  //   path: "/sales",
+  //   label: "Sales & Orders",
+  //   icon: "M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z",
+  // },
   { path: '/audit-logs', label: 'Audit Logs', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
   {
     path: "/ai-insights",
@@ -45,7 +44,12 @@ interface SidebarProps {
   setIsMobileOpen: (open: boolean) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, toggleCollapse, isMobileOpen, setIsMobileOpen }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  isCollapsed,
+  toggleCollapse,
+  isMobileOpen,
+  setIsMobileOpen,
+}) => {
   const location = useLocation();
   const { theme, setTheme } = useTheme();
   const { user, logout } = useAuth();

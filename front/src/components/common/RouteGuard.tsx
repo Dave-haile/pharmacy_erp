@@ -28,6 +28,9 @@ export function RouteGuard({ children }: RouteGuardProps) {
   const isItemDetailsRoute = /^\/inventory\/medicines\/[^/]+$/.test(
     location.pathname,
   );
+  const isSupplierDetailsRoute = /^\/inventory\/suppliers\/\d+$/.test(
+    location.pathname,
+  );
 
   useEffect(() => {
     if (loading) return;
@@ -69,5 +72,9 @@ export function RouteGuard({ children }: RouteGuardProps) {
     return null;
   }
 
-  return <MainLayout fullWidth={isItemDetailsRoute}>{children}</MainLayout>;
+  return (
+    <MainLayout fullWidth={isItemDetailsRoute || isSupplierDetailsRoute}>
+      {children}
+    </MainLayout>
+  );
 }

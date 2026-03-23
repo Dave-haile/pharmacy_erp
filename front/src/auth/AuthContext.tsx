@@ -108,7 +108,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      await api.post("/api/logout/", undefined, { withCredentials: true });
+      const response = await api.post("/api/logout/", undefined, { withCredentials: true });
+      console.log(response);
     } finally {
       setUser(null);
       setAuthCheckError(null);

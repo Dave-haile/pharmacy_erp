@@ -39,6 +39,138 @@ export interface InventoryItem {
   status: "In Stock" | "Low Stock" | "Expired" | "Reserved";
   storageCondition: string;
 }
+
+export interface InventoryBatchItem {
+  id: number;
+  batch_id: number;
+  batch_number: string;
+  medicine_id: number;
+  medicine_name: string;
+  generic_name: string;
+  naming_series: string | null;
+  barcode: string;
+  category: string;
+  supplier: string;
+  supplier_id: number | null;
+  quantity: number;
+  medicine_total_quantity: number;
+  unit_cost: string;
+  selling_price: string;
+  manufacturing_date: string;
+  expiry_date: string;
+  location: string;
+  received_at: string;
+  status: "In Stock" | "Low Stock" | "Expiring Soon" | "Expired";
+  status_key: "in_stock" | "low_stock" | "expiring_soon" | "expired";
+  days_to_expiry: number;
+  is_expired: boolean;
+  is_expiring_soon: boolean;
+  is_low_stock: boolean;
+  fifo_priority: number | null;
+  sell_first: boolean;
+}
+
+export interface InventoryOverviewSummary {
+  total_batches: number;
+  total_medicines: number;
+  total_quantity: number;
+  expiring_soon_count: number;
+  expired_count: number;
+  fifo_candidate_count: number;
+  expiry_soon_days: number;
+  low_stock_threshold: number;
+}
+
+export interface InventoryOverviewResponse {
+  summary: InventoryOverviewSummary;
+  items: InventoryBatchItem[];
+  fifo_candidates: InventoryBatchItem[];
+  expiring_soon: InventoryBatchItem[];
+  total_count: number;
+}
+
+export interface BatchMovement {
+  stock_entry_id: number;
+  posting_number: string;
+  invoice_number: string;
+  quantity: number;
+  unit_price: string;
+  status: string;
+  created_at: string;
+}
+
+export interface BatchDetail extends InventoryBatchItem {
+  recent_movements: BatchMovement[];
+  related_batches: InventoryBatchItem[];
+}
+
+export interface StockOutItemInput {
+  medicine_id: number | null;
+  batch_id?: number | null;
+  quantity: string;
+  unit_price: string;
+}
+
+export interface CreateStockOut {
+  customer_name: string;
+  invoice_number: string;
+  payment_method: string;
+  notes: string;
+  items: StockOutItemInput[];
+}
+
+export interface StockOutDetailItem {
+  id: number;
+  medicine_id: number;
+  medicine_name: string;
+  batch_id: number;
+  inventory_batch_id?: number | null;
+  batch_number: string;
+  inventory_batch_number?: string;
+  quantity: number;
+  price_at_sale: string;
+  subtotal: string;
+  expiry_date: string;
+}
+
+export interface StockOutSummary {
+  id: number;
+  posting_number: string;
+  customer_name: string;
+  invoice_number: string;
+  payment_method: string;
+  payment_method_label: string;
+  status: "Draft" | "Posted" | "Cancelled";
+  status_key: "draft" | "posted" | "cancelled";
+  total_amount: string;
+  total_quantity: number;
+  cashier_id: number;
+  cashier: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockOutDetail extends StockOutSummary {
+  items: StockOutDetailItem[];
+}
+
+export interface StockOutListResponse {
+  count: number;
+  num_pages: number;
+  current_page: number;
+  results: StockOutSummary[];
+}
+
+export interface StockOutBatchOption {
+  batch_id: number;
+  batch_number: string;
+  medicine_id: number;
+  medicine_name: string;
+  quantity: number;
+  expiry_date: string;
+  received_at: string;
+}
 export type CreateMedicine = {
   name: string;
   generic_name: string;
@@ -86,12 +218,17 @@ export interface Category {
 }
 export interface Supplier {
   id?: number;
+  naming_series?: string | null;
   name: string;
   contact_person: string;
   phone: string;
   email: string;
   address: string;
-  created_at: string;
+  status?: "Draft" | "Submitted" | "Cancelled";
+  is_active?: boolean;
+  medicine_count?: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Log {
@@ -149,7 +286,9 @@ export interface StockEntryDetailItem {
   medicine_id: number;
   medicine_name: string;
   batch_id: number | null;
+  inventory_batch_id?: number | null;
   batch_number: string;
+  inventory_batch_number?: string;
   quantity: number;
   unit_price: string;
   total_price: string;

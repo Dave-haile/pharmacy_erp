@@ -35,16 +35,13 @@ const StockInItemsFilters: React.FC<StockInItemsFiltersProps> = ({
   onSupplierChange,
   onStatusChange,
 }) => {
-  const filterInputClassName = `${documentInputClassName} border-none bg-transparent px-0 py-2 shadow-none focus:bg-transparent focus:ring-0 dark:bg-transparent`;
+  const filterInputClassName = `${documentInputClassName} border-none bg-transparent shadow-none focus:bg-transparent focus:ring-0 dark:bg-transparent`;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-end">
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <DocumentField label="Posting Number">
-          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950">
-            <span className="mr-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-600">
-              No
-            </span>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
             <input
               type="text"
               name="posting_number"
@@ -56,10 +53,7 @@ const StockInItemsFilters: React.FC<StockInItemsFiltersProps> = ({
           </div>
         </DocumentField>
         <DocumentField label="Invoice Number">
-          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 dark:border-slate-800 dark:bg-slate-950">
-            <span className="mr-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-600">
-              Ref
-            </span>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-950">
             <input
               type="text"
               name="invoice_number"

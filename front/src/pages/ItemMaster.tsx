@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import SearchableSelect from "../components/SearchableSelect";
 import DataTable, { Column } from "../components/DataTable";
 import { useToast } from "../hooks/useToast";
 import { fetchMedicines } from "../services/medicines";
 import { MedicineItem } from "../types/types";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useCategories } from "../services/common";
 import { fetchSuppliers } from "../services/suppler";
-import Select from "../components/ui/SelectTag";
 
 const ItemMaster: React.FC = () => {
-  const [items, setItems] = useState<MedicineItem[]>([]);
   const [categoryInputSearch, setCategoryInputSearch] = useState("");
   const [supplierInputSearch, setSupplierInputSearch] = useState("");
   const [filters, setFilters] = useState<{
@@ -29,7 +27,6 @@ const ItemMaster: React.FC = () => {
   });
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const [sortConfig, setSortConfig] = useState<{
     key: string;
     direction: "asc" | "desc";
@@ -46,40 +43,28 @@ const ItemMaster: React.FC = () => {
 
     return () => clearTimeout(handler);
   }, [filters]);
-  const requestRef = useRef(0);
-  const { data } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["medicines", currentPage, pageSize, debouncedFilters],
-    queryFn: () =>
-      fetchMedicines(currentPage, pageSize, debouncedFilters),
+    queryFn: () => fetchMedicines(currentPage, pageSize, debouncedFilters),
     staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
   });
+
   useEffect(() => {
-    const requestId = ++requestRef.current;
+    if (!error) return;
 
-
-    const loadData = async () => {
-      try {
-        if (requestRef.current === requestId) {
-          setItems(data?.results || []);
-          setTotalCount(data?.count || 0);
-        }
-      } catch (e) {
-        console.error("Items fetch failed", e);
-
-        if (e.response?.status !== 401) {
-          const errorMessage =
-            e.response?.data?.message ||
-            e.response?.data?.error ||
-            "Failed to fetch medicines. Please try again.";
-          showError(errorMessage);
-        }
-      }
-    };
-
-    loadData();
-  }, [data?.results, data?.count, showError]);
-
-
+    const errorMessage =
+      error &&
+      typeof error === "object" &&
+      "response" in error &&
+      error.response
+        ? (error.response as { data?: { error?: string; message?: string } })
+            ?.data?.error ||
+          (error.response as { data?: { error?: string; message?: string } })
+            ?.data?.message
+        : "Failed to fetch medicines. Please try again.";
+    showError(errorMessage);
+  }, [error, showError]);
 
   const { data: suppliersData } = useQuery({
     queryKey: ["suppliers", supplierInputSearch],
@@ -88,16 +73,23 @@ const ItemMaster: React.FC = () => {
   });
 
   const supplierGroups = React.useMemo(() => {
-    return suppliersData?.results?.map((supplier) => ({
-      value: String(supplier.id),
-      label: supplier.name,
-      subtitle: `${supplier.phone} - ${supplier.email} - ${supplier.address}`,
-    })) || [];
+    return (
+      suppliersData?.results?.map((supplier) => ({
+        value: String(supplier.id),
+        label: supplier.name,
+        subtitle: `${supplier.phone} - ${supplier.email} - ${supplier.address}`,
+      })) || []
+    );
   }, [suppliersData?.results]);
 
-
-
+  const items = useMemo<MedicineItem[]>(
+    () => data?.results || [],
+    [data?.results],
+  );
+  const totalCount = data?.count || 0;
   const paginatedItems = items;
+  const hasLoadedRows = items.length > 0;
+  const isTableRefreshing = isFetching && hasLoadedRows;
 
   const handleLoadMore = () => {
     setCurrentPage((prev) => prev + 1);
@@ -126,7 +118,6 @@ const ItemMaster: React.FC = () => {
     setCurrentPage(1); // Reset to first page when page size changes
   };
 
-
   const requestSort = (key: string) => {
     let direction: "asc" | "desc" = "asc";
     if (
@@ -138,7 +129,6 @@ const ItemMaster: React.FC = () => {
     }
     setSortConfig({ key, direction });
   };
-
 
   const { itemGroups } = useCategories(categoryInputSearch);
 
@@ -241,6 +231,7 @@ const ItemMaster: React.FC = () => {
                 className="bg-transparent outline-none text-[11px] w-full font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
                 value={filters.name}
                 onChange={handleFilterChange}
+                autoComplete="off"
               />
             </div>
           </div>
@@ -253,6 +244,7 @@ const ItemMaster: React.FC = () => {
                 className="bg-transparent outline-none text-[11px] w-full font-mono font-bold text-slate-800 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600"
                 value={filters.generic_name}
                 onChange={handleFilterChange}
+                autoComplete="off"
               />
             </div>
           </div>
@@ -278,23 +270,38 @@ const ItemMaster: React.FC = () => {
               placeholder="Select Supplier"
               className="w-full"
               triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-              onCreateNew={() => navigate("/inventory/medicine-suppliers/new")}
+              onCreateNew={() => navigate("/inventory/suppliers/new")}
               createNewText="Add New Medicine Supplier"
             />
           </div>
           <div className="space-y-1.5 min-w-[170px]">
-            {/* <div className="relative">
+            <div className="relative">
+              {!filters.status && (
+                <span className="pointer-events-none absolute left-3 top-1/2 z-1 -translate-y-1/2 text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">
+                  Status
+                </span>
+              )}
               <select
                 autoComplete="off"
                 name="status"
                 value={filters.status || ""}
                 onChange={handleFilterChange}
-                className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all w-full appearance-none  pl-3 pr-9 text-[11px] font-mono font-bold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 "
+                className={`w-full appearance-none rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 pr-9 text-[11px] font-mono font-bold transition-all focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 dark:border-slate-800 dark:bg-slate-800 ${
+                  filters.status
+                    ? "text-slate-800 dark:text-white"
+                    : "text-transparent"
+                }`}
               >
-                <option value="" disabled selected hidden className="text-gray-500">Status...</option>
                 <option value=""></option>
-                <option value="Draft">Draft</option>
-                <option value="Submitted">Submitted</option>
+                {statusOptions.map((option) => (
+                  <option
+                    key={option.value}
+                    value={option.value}
+                    className="text-slate-800 dark:text-white"
+                  >
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <svg
                 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500"
@@ -308,20 +315,7 @@ const ItemMaster: React.FC = () => {
                   clipRule="evenodd"
                 />
               </svg>
-            </div> */}
-            <Select
-              options={statusOptions}
-              value={filters.status || ""}
-              placeholder="Status..."
-              allowEmpty
-              emptyLabel=""
-              onChange={(value) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  status: value,
-                }))
-              }
-            />
+            </div>
           </div>
         </div>
       </div>
@@ -371,10 +365,11 @@ const ItemMaster: React.FC = () => {
           <button
             key={size}
             onClick={() => handlePageSizeChange(size)}
-            className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${pageSize === size
-              ? "bg-slate-900 dark:bg-slate-700 text-white shadow-lg"
-              : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
-              }`}
+            className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+              pageSize === size
+                ? "bg-slate-900 dark:bg-slate-700 text-white shadow-lg"
+                : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
+            }`}
           >
             {size}
           </button>
@@ -449,17 +444,29 @@ const ItemMaster: React.FC = () => {
       <DataTable
         columns={columns}
         data={paginatedItems}
+        isLoading={isLoading && !hasLoadedRows}
+        isRefreshing={isTableRefreshing}
+        onRefresh={refetch}
         filters={Filters}
         footer={Footer}
-        onRowClick={(item) => navigate(`/inventory/medicines/${item.naming_series}`)}
+        onRowClick={(item) =>
+          navigate(`/inventory/medicines/${item.naming_series}`)
+        }
         selectable
         sortConfig={sortConfig}
         onSort={requestSort}
         loadingMessage="Accessing Master Registry..."
         emptyMessage="No items found in master database"
+        refreshMessage="Updating"
+        refreshLabel="Refresh"
         headerRight={
-          <div className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest">
-            {items.length} of {totalCount} Records
+          <div className="flex items-center gap-3 text-[10px] font-black text-slate-400 uppercase tracking-widest dark:text-slate-600">
+            {isTableRefreshing && (
+              <span className="inline-flex h-2 w-2 rounded-full bg-sky-500/80" />
+            )}
+            <span>
+              {items.length} of {totalCount} Records
+            </span>
           </div>
         }
       />

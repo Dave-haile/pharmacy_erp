@@ -252,7 +252,8 @@ const StockEntryLineItemCard: React.FC<StockEntryLineItemCardProps> = ({
               min="1"
               value={item.quantity}
               onChange={(e) => onChangeField(index, "quantity", e.target.value)}
-              className={documentInputClassName}
+              className={`${documentInputClassName} appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+
               disabled={!isEditable}
             />
           </DocumentField>
@@ -267,7 +268,8 @@ const StockEntryLineItemCard: React.FC<StockEntryLineItemCardProps> = ({
               onChange={(e) =>
                 onChangeField(index, "unit_price", e.target.value)
               }
-              className={documentInputClassName}
+              className={`${documentInputClassName} appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+
               placeholder="0.00"
               disabled={!isEditable}
             />

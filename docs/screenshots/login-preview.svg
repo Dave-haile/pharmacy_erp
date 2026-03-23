@@ -1,0 +1,12 @@
+<svg width="1280" height="720" viewBox="0 0 1280 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="720" fill="#0F172A"/>
+  <rect x="390" y="110" width="500" height="500" rx="32" fill="#111C34"/>
+  <rect x="450" y="170" width="180" height="26" rx="13" fill="#CFFAFE"/>
+  <rect x="450" y="212" width="280" height="16" rx="8" fill="#29415F"/>
+  <rect x="450" y="278" width="380" height="60" rx="18" fill="#162743"/>
+  <rect x="450" y="362" width="380" height="60" rx="18" fill="#162743"/>
+  <rect x="450" y="454" width="380" height="56" rx="18" fill="#22C55E"/>
+  <rect x="450" y="532" width="220" height="16" rx="8" fill="#29415F"/>
+  <text x="450" y="642" fill="#E2E8F0" font-family="Arial, sans-serif" font-size="28" font-weight="700">Login Page Screenshot Placeholder</text>
+  <text x="450" y="674" fill="#94A3B8" font-family="Arial, sans-serif" font-size="18">Replace with the actual login screen capture.</text>
+</svg>

@@ -21,6 +21,8 @@ const summaryToneMap: Record<AccentTone, string> = {
 
 export const documentInputClassName =
   "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none shadow-sm transition-all placeholder:text-slate-400 focus:border-emerald-500/70 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-600 dark:focus:bg-slate-950";
+export const documentSearchInputClassName =
+  "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none shadow-sm transition-all placeholder:text-slate-400 focus:border-emerald-500/70 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-600 dark:focus:bg-slate-950";
 
 export const documentTextareaClassName = `${documentInputClassName} min-h-[112px] resize-y font-medium`;
 

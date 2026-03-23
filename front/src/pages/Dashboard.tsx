@@ -136,7 +136,7 @@ const Dashboard: React.FC = () => {
           api.get("/api/inventory"),
         ]);
         setStats(statsRes.data);
-        setInventory(invRes.data);
+        setInventory(invRes.data.items ?? []);
       } catch (error) {
         console.error("Failed to fetch dashboard data", error);
       } finally {
@@ -146,7 +146,7 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, []);
 
-  const lowStockItems = inventory.filter((item) => item.qty < 10);
+  const lowStockItems = inventory.filter((item) => item.quantity < 10);
 
   if (isLoading)
     return (
@@ -295,7 +295,8 @@ const Dashboard: React.FC = () => {
                 <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
                   <button
                     onClick={() => setSalesView("weekly")}
-                    className={`px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md transition-all ${salesView === "weekly"
+                    className={`px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md transition-all ${
+                      salesView === "weekly"
                         ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
                         : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                     }`}
@@ -304,7 +305,8 @@ const Dashboard: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setSalesView("daily")}
-                    className={`px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md transition-all ${salesView === "daily"
+                    className={`px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest rounded-md transition-all ${
+                      salesView === "daily"
                         ? "bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-sm"
                         : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                     }`}
@@ -384,12 +386,13 @@ const Dashboard: React.FC = () => {
                     className="flex items-start space-x-2.5 group"
                   >
                     <div
-                      className={`w-1 h-1 rounded-full mt-1.5 shrink-0 ${log.type === "success"
+                      className={`w-1 h-1 rounded-full mt-1.5 shrink-0 ${
+                        log.type === "success"
                           ? "bg-emerald-500"
                           : log.type === "warning"
                             ? "bg-amber-500"
                             : "bg-blue-500"
-                        }`}
+                      }`}
                     ></div>
                     <div className="flex-1">
                       <div className="flex justify-between items-baseline">
@@ -577,10 +580,11 @@ const Dashboard: React.FC = () => {
                 System Alerts
               </h3>
               <span
-                className={`px-1 md:px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${lowStockItems.length > 0
+                className={`px-1 md:px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase ${
+                  lowStockItems.length > 0
                     ? "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400"
                     : "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
-                  }`}
+                }`}
               >
                 {lowStockItems.length}
               </span>
@@ -596,21 +600,21 @@ const Dashboard: React.FC = () => {
                   >
                     <div className="flex justify-between items-start mb-0.5">
                       <h4 className="font-black text-slate-800 dark:text-slate-200 text-[10px] uppercase tracking-tight truncate pr-1.5">
-                        {item.name}
+                        {item.medicine_name}
                       </h4>
                       <div className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0"></div>
                     </div>
                     <div className="flex items-end justify-between">
                       <div className="space-y-0">
                         <p className="text-[8px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest truncate">
-                          {item.sku}
+                          {item.naming_series || item.batch_number}
                         </p>
                         <div className="flex items-baseline space-x-1">
                           <span className="text-base font-black text-red-600 dark:text-red-400">
-                            {item.qty}
+                            {item.quantity}
                           </span>
                           <span className="text-[8px] text-red-400 dark:text-red-500 font-black uppercase">
-                            {item.unit}
+                            units
                           </span>
                         </div>
                       </div>
@@ -620,24 +624,24 @@ const Dashboard: React.FC = () => {
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3">
-                  <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 text-emerald-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="2"
-                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
+                <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
+                  <svg
+                    className="w-5 h-5 text-emerald-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
                   </svg>
                 </div>
-                  <p className="text-slate-800 dark:text-slate-200 text-[10px] font-black uppercase tracking-tight">
-                    Nominal State
-                  </p>
+                <p className="text-slate-800 dark:text-slate-200 text-[10px] font-black uppercase tracking-tight">
+                  Nominal State
+                </p>
               </div>
             )}
 

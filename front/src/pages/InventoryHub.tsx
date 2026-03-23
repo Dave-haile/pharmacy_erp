@@ -171,6 +171,7 @@ const InventoryHub: React.FC = () => {
           path: "/inventory/medicine-grouping",
           highlighted: true,
         },
+        { label: "Supplier", path: "/inventory/suppliers", highlighted: true },
         { label: "Product Bundles", path: "#", highlighted: true },
         { label: "Global Price List", path: "#" },
         { label: "SKU Pricing", path: "#" },
@@ -204,6 +205,12 @@ const InventoryHub: React.FC = () => {
         {
           label: "Warehouse Stock Entry",
           path: "/inventory/stock-entries",
+          highlighted: true,
+          active: true,
+        },
+        {
+          label: "Sales",
+          path: "/inventory/sales",
           highlighted: true,
           active: true,
         },

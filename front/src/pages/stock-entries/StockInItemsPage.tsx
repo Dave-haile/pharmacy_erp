@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import DataTable, { Column } from "../../components/DataTable";
 import { useToast } from "../../hooks/useToast";
 import { useSuppliers } from "../../services/common";
@@ -49,20 +49,24 @@ const StockInItemsPage: React.FC = () => {
 
   const { supplierGroups } = useSuppliers(supplierInputSearch);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["stock-entries", currentPage, pageSize, debouncedFilters],
     queryFn: () => fetchStockEntries(currentPage, pageSize, debouncedFilters),
     staleTime: 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 
   useEffect(() => {
     if (error) {
       const errorMessage =
-        error && typeof error === "object" && "response" in error && error.response
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response
           ? (error.response as { data?: { error?: string; message?: string } })
-            ?.data?.error ||
-          (error.response as { data?: { error?: string; message?: string } })
-            ?.data?.message
+              ?.data?.error ||
+            (error.response as { data?: { error?: string; message?: string } })
+              ?.data?.message
           : "Failed to post stock entry.";
       showError(errorMessage);
     }
@@ -114,6 +118,8 @@ const StockInItemsPage: React.FC = () => {
 
   const paginatedItems = useMemo(() => filteredItems, [filteredItems]);
   const hasNextPage = Boolean(data?.has_next);
+  const hasLoadedRows = items.length > 0;
+  const isTableRefreshing = isFetching && hasLoadedRows;
   const visibleDrafts = filteredItems.filter(
     (item) => item.status === "Draft",
   ).length;
@@ -285,10 +291,11 @@ const StockInItemsPage: React.FC = () => {
           <button
             key={size}
             onClick={() => handlePageSizeChange(size)}
-            className={`rounded-lg px-4 py-1.5 text-[10px] font-black transition-all ${pageSize === size
+            className={`rounded-lg px-4 py-1.5 text-[10px] font-black transition-all ${
+              pageSize === size
                 ? "bg-slate-900 text-white shadow-lg dark:bg-slate-700"
                 : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-300"
-              }`}
+            }`}
           >
             {size}
           </button>
@@ -361,18 +368,18 @@ const StockInItemsPage: React.FC = () => {
       <DataTable
         columns={columns}
         data={paginatedItems}
-        isLoading={isLoading}
+        isLoading={isLoading && !hasLoadedRows}
+        isRefreshing={isTableRefreshing}
+        onRefresh={refetch}
         filters={filtersContent}
         footer={footer}
         onRowClick={(item) => {
-          if (item.status_key === "draft") {
-            navigate(
-              `/inventory/stock-entries/${item.posting_number}?id=${item.id}`,
-              {
-                state: { stockEntryId: item.id },
-              },
-            );
-          }
+          navigate(
+            `/inventory/stock-entries/${item.posting_number}?id=${item.id}`,
+            {
+              state: { stockEntryId: item.id },
+            },
+          );
         }}
         rowClassName={(item) =>
           item.status_key === "draft" ? "" : "opacity-90"
@@ -381,9 +388,16 @@ const StockInItemsPage: React.FC = () => {
         onSort={requestSort}
         emptyMessage="No stock in items found"
         loadingMessage="Loading stock receipts..."
+        refreshMessage="Updating register..."
+        refreshLabel="Refresh"
         headerRight={
-          <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
-            {items.length} of {totalCount} Records
+          <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
+            {isTableRefreshing && (
+              <span className="inline-flex h-2 w-2 rounded-full bg-sky-500/80" />
+            )}
+            <span>
+              {items.length} of {totalCount} Records
+            </span>
           </div>
         }
       />

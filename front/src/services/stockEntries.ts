@@ -1,4 +1,4 @@
-import { CreateStockEntry } from "../types/types";
+import { CreateStockEntry, Log } from "../types/types";
 import api from "./api";
 
 export const createStockEntry = async (payload: CreateStockEntry) => {
@@ -68,4 +68,18 @@ export const submitStockEntry = async (stockEntryId: string | number) => {
     `/api/inventory/stock-entries/${stockEntryId}/submit/`,
   );
   return res.data;
+};
+
+export const cancelStockEntry = async (stockEntryId: string | number) => {
+  const res = await api.post(
+    `/api/inventory/stock-entries/${stockEntryId}/cancel/`,
+  );
+  return res.data;
+};
+
+export const fetchStockEntryLogs = async (stockEntryId: string | number) => {
+  const res = await api.get(
+    `/api/inventory/stock-entries/${stockEntryId}/logs/`,
+  );
+  return res.data as Log[];
 };

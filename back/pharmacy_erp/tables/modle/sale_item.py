@@ -1,27 +1,24 @@
 # pharmacy/models/sale_item.py
 
 from django.db import models
-from .sale import Sale
-from .medicine import Medicine
+
 from .batches import Batches
+from .medicine import Medicine
+from .sale import Sale
+
 
 class SaleItem(models.Model):
-    sale = models.ForeignKey(
-        Sale,
-        on_delete=models.CASCADE,
-        related_name="items"
-    )
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name="items")
 
-    medicine = models.ForeignKey(
-        Medicine,
-        on_delete=models.PROTECT
-    )
+    medicine = models.ForeignKey(Medicine, on_delete=models.PROTECT)
 
     quantity = models.PositiveIntegerField()
-    batch_id = models.ForeignKey(
-        'Batches',
+    batch = models.ForeignKey(
+        "Batches",
         on_delete=models.PROTECT,
-        related_name='sale_items'
+        related_name="sale_items",
+        null=True,
+        blank=True,
     )
     price_at_sale = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -31,8 +28,8 @@ class SaleItem(models.Model):
         return f"{self.medicine.name} x {self.quantity}"
 
     class Meta:
-        db_table = 'SaleItem'
-        verbose_name_plural = 'Sale Items'
+        db_table = "SaleItem"
+        verbose_name_plural = "Sale Items"
         indexes = [
-            models.Index(fields=['sale', 'medicine', 'batch_id']),
+            models.Index(fields=["sale", "medicine", "batch"]),
         ]

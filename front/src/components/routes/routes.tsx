@@ -15,6 +15,11 @@ import LandingPage from "@/src/pages/Landing/LandingPage";
 import { RouteGuard } from "../common/RouteGuard";
 import NotFound from "@/src/pages/NotFound";
 import AuditLogs from "@/src/pages/AuditLogs";
+import SupplierRegistry from "@/src/pages/suppliers/SupplierRegistry";
+import SupplierForm from "@/src/pages/suppliers/SupplierForm";
+import SupplierDetails from "@/src/pages/suppliers/SupplierDetails";
+import StockOutRegistry from "@/src/pages/sales/StockOutRegistry";
+import StockOutDetails from "@/src/pages/sales/StockOutDetails";
 interface RouteConfig {
   key: string;
   name: string;
@@ -97,6 +102,36 @@ const routes: RouteConfig[] = [
     ),
   },
   {
+    key: "suppliers",
+    name: "Suppliers",
+    path: "inventory/suppliers",
+    element: (
+      <RouteGuard>
+        <SupplierRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "create-supplier",
+    name: "Create Supplier",
+    path: "inventory/suppliers/new-supplier",
+    element: (
+      <RouteGuard>
+        <SupplierForm />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "supplier-details",
+    name: "Supplier Details",
+    path: "inventory/suppliers/:naming_series",
+    element: (
+      <RouteGuard>
+        <SupplierDetails />
+      </RouteGuard>
+    ),
+  },
+  {
     key: "create-item",
     name: "Create Item",
     path: "inventory/medicines/new-medicine",
@@ -173,11 +208,31 @@ const routes: RouteConfig[] = [
   {
     key: "sales",
     name: "Sales",
-    path: "/sales",
+    path: "inventory/sales",
     element: (
-      <div className="p-6 text-center">
-        <h1 className="text-xl font-bold">Sales Module Under Construction</h1>
-      </div>
+      <RouteGuard>
+        <StockOutRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-out-registry",
+    name: "Stock Out Register",
+    path: "inventory/sales/stock-outs",
+    element: (
+      <RouteGuard>
+        <StockOutRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-out-details",
+    name: "Stock Out",
+    path: "inventory/sales/stock-outs/:postingNumber",
+    element: (
+      <RouteGuard>
+        <StockOutDetails />
+      </RouteGuard>
     ),
   },
   {

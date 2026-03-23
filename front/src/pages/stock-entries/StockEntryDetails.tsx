@@ -13,14 +13,17 @@ import {
   fetchMedicines,
 } from "../../services/medicines";
 import {
+  cancelStockEntry,
   createStockEntry,
   fetchStockEntries,
   fetchStockEntryById,
+  fetchStockEntryLogs,
   submitStockEntry,
   updateStockEntry,
 } from "../../services/stockEntries";
 import {
   CreateStockEntry,
+  Log,
   MedicineItem,
   StockEntryItemInput,
 } from "../../types/types";
@@ -38,6 +41,7 @@ import {
   documentSelectTriggerClassName,
   documentTextareaClassName,
 } from "../../components/common/DocumentUI";
+import DocumentActivityLog from "../../components/common/DocumentActivityLog";
 import StockEntryActionsMenu from "./StockEntryActionsMenu";
 import StockEntryLineItemCard from "./StockEntryLineItemCard";
 import {
@@ -63,6 +67,9 @@ const StockEntryPage: React.FC = () => {
   >({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [logs, setLogs] = useState<Log[]>([]);
+  const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(isNewEntry);
   const [stockEntryId, setStockEntryId] = useState<string | number | null>(
@@ -151,6 +158,27 @@ const StockEntryPage: React.FC = () => {
     });
     setIsEditing(false);
   }, [stockEntryQuery.data]);
+
+  useEffect(() => {
+    if (!stockEntryId || isNewEntry) {
+      setLogs([]);
+      return;
+    }
+
+    const loadLogs = async () => {
+      setIsLogsLoading(true);
+      try {
+        const data = await fetchStockEntryLogs(stockEntryId);
+        setLogs(data);
+      } catch (error) {
+        console.error("Stock entry logs load error", error);
+      } finally {
+        setIsLogsLoading(false);
+      }
+    };
+
+    void loadLogs();
+  }, [isNewEntry, stockEntryId]);
 
   useEffect(() => {
     if (!duplicateStockEntry || !isNewEntry) return;
@@ -405,6 +433,48 @@ const StockEntryPage: React.FC = () => {
     }
   };
 
+  const handleCancelPosted = async () => {
+    if (!stockEntryId || currentStatusKey !== "posted") return;
+
+    const { confirmed } = await confirm({
+      title: "Cancel Stock Entry",
+      message:
+        "This will change the document status from Posted to Cancelled. Continue?",
+      confirmLabel: "Cancel Document",
+      cancelLabel: "Keep Posted",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    setIsCancelling(true);
+    try {
+      const response = await cancelStockEntry(stockEntryId);
+      const updatedEntry = response?.stock_entry;
+
+      if (updatedEntry?.status_key) {
+        setCurrentStatusKey(updatedEntry.status_key);
+      }
+
+      setIsEditing(false);
+      showSuccess(response.message || "Stock entry cancelled successfully.");
+    } catch (error: unknown) {
+      const message =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response
+          ? (error.response as { data?: { error?: string; message?: string } })
+              ?.data?.error ||
+            (error.response as { data?: { error?: string; message?: string } })
+              ?.data?.message
+          : "Failed to cancel stock entry.";
+      showError(message);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const handleDuplicate = () => {
     navigate("/inventory/stock-entries/new-stock-entry", {
       state: { duplicateStockEntry: formData },
@@ -472,6 +542,16 @@ const StockEntryPage: React.FC = () => {
   const canEditForm = isNewEntry || isEditing;
   const canEditDraft =
     !isNewEntry && !!stockEntryId && currentStatusKey === "draft" && !isEditing;
+  const canCancelPosted =
+    !isNewEntry &&
+    !!stockEntryId &&
+    currentStatusKey === "posted" &&
+    !isEditing;
+  const canAmendCancelled =
+    !isNewEntry &&
+    !!stockEntryId &&
+    currentStatusKey === "cancelled" &&
+    !isEditing;
   const canPostDraft =
     !isNewEntry && !!stockEntryId && currentStatusKey === "draft" && !isEditing;
   const canSave = canEditForm;
@@ -485,10 +565,14 @@ const StockEntryPage: React.FC = () => {
   const modeLabel = isNewEntry
     ? "New Draft"
     : isEditing
-      ? "Editing Draft"
+      ? currentStatusKey === "cancelled"
+        ? "Amending Cancelled Entry"
+        : "Editing Draft"
       : currentStatusKey === "posted"
         ? "Posted"
-        : "Draft Review";
+        : currentStatusKey === "cancelled"
+          ? "Cancelled"
+          : "Draft Review";
   const documentReference =
     !isNewEntry && postingNumber ? postingNumber : "Auto";
 
@@ -513,6 +597,15 @@ const StockEntryPage: React.FC = () => {
                 className={documentSecondaryButtonClassName}
               >
                 Edit
+              </button>
+            )}
+            {canAmendCancelled && (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={documentSecondaryButtonClassName}
+              >
+                Amend
               </button>
             )}
             {isEditing && !isNewEntry && (
@@ -555,6 +648,16 @@ const StockEntryPage: React.FC = () => {
                 Cancel
               </button>
             )}
+            {canCancelPosted && (
+              <button
+                type="button"
+                onClick={handleCancelPosted}
+                disabled={isCancelling || isSubmitting || isPosting}
+                className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-[11px] font-black uppercase tracking-widest text-rose-700 shadow-sm transition-all hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-300 dark:hover:bg-rose-950/30"
+              >
+                {isCancelling ? "Cancelling..." : "Cancel Document"}
+              </button>
+            )}
             {canPostDraft && (
               <button
                 type="button"
@@ -569,7 +672,12 @@ const StockEntryPage: React.FC = () => {
               <button
                 type="submit"
                 form="stock-entry-form"
-                disabled={isSubmitting || isExistingEntryLoading || isPosting}
+                disabled={
+                  isSubmitting ||
+                  isExistingEntryLoading ||
+                  isPosting ||
+                  isCancelling
+                }
                 className={documentPrimaryButtonClassName}
               >
                 {submitLabel}
@@ -597,8 +705,14 @@ const StockEntryPage: React.FC = () => {
             isNewEntry
               ? "Posting number generated on save"
               : isEditing
-                ? "Editing enabled for this draft"
-                : "Open in review mode until edit is enabled"
+                ? currentStatusKey === "cancelled"
+                  ? "Amend mode enabled; saving returns this document to draft"
+                  : "Editing enabled for this draft"
+                : currentStatusKey === "posted"
+                  ? "Posted documents can be cancelled before amendment"
+                  : currentStatusKey === "cancelled"
+                    ? "Use Amend to unlock editing and move back to draft on save"
+                    : "Open in review mode until edit is enabled"
           }
           tone="blue"
         />
@@ -654,9 +768,7 @@ const StockEntryPage: React.FC = () => {
                 placeholder="Search supplier"
                 triggerClassName={documentSelectTriggerClassName}
                 disabled={!canEditForm}
-                onCreateNew={() =>
-                  navigate("/inventory/medicines/new-supplier")
-                }
+                onCreateNew={() => navigate("/inventory/suppliers/new")}
                 createNewText="Add New Supplier"
               />
             </DocumentField>
@@ -683,7 +795,7 @@ const StockEntryPage: React.FC = () => {
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, tax: e.target.value }))
                 }
-                className={documentInputClassName}
+                className={`${documentInputClassName} appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
                 placeholder="0.00"
                 disabled={!canEditForm}
               />
@@ -777,6 +889,16 @@ const StockEntryPage: React.FC = () => {
             valueClassName="text-emerald-700 dark:text-emerald-300"
           />
         </section>
+
+        {!isNewEntry && (
+          <DocumentActivityLog
+            logs={logs}
+            isLoading={isLogsLoading}
+            onViewAll={() => navigate("/audit-logs")}
+            title="Activity Log"
+            description="Recent changes made only to this stock entry."
+          />
+        )}
       </form>
     </DocumentPage>
   );
