@@ -27,6 +27,7 @@ export const fetchInventoryOverview = async (filters?: {
 
   const suffix = params.toString() ? `?${params.toString()}` : "";
   const res = await api.get(`/api/inventory/${suffix}`);
+  console.log(res.data);
   return res.data as InventoryOverviewResponse;
 };
 

@@ -4,7 +4,25 @@ class StockLedger(models.Model):
     transaction_id = models.AutoField(primary_key=True)
     medicine=models.ForeignKey('medicine',on_delete=models.SET_NULL, null=True)
     batch = models.ForeignKey('batches', on_delete=models.SET_NULL, null=True)
-    transaction_type = models.CharField(max_length=20,choices=(('purchase', 'sale', 'return', 'adjustment', 'damage'))),
+    TRANSACTION_PURCHASE = "purchase"
+    TRANSACTION_SALE = "sale"
+    TRANSACTION_RETURN = "return"
+    TRANSACTION_ADJUSTMENT = "adjustment"
+    TRANSACTION_DAMAGE = "damage"
+
+    TRANSACTION_TYPE_CHOICES = (
+        (TRANSACTION_PURCHASE, "Purchase"),
+        (TRANSACTION_SALE, "Sale"),
+        (TRANSACTION_RETURN, "Return"),
+        (TRANSACTION_ADJUSTMENT, "Adjustment"),
+        (TRANSACTION_DAMAGE, "Damage"),
+    )
+
+    transaction_type = models.CharField(
+        max_length=20,
+        choices=TRANSACTION_TYPE_CHOICES,
+        default=TRANSACTION_PURCHASE,
+    )
     quantity = models.IntegerField()
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     reference_document = models.CharField(max_length=50)
@@ -12,7 +30,7 @@ class StockLedger(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.transaction_id
+        return f"{self.transaction_id}"
     
     class Meta:
         db_table = 'StockLedger'

@@ -6,6 +6,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 
+import SearchableSelect from "../../components/SearchableSelect";
 import DocumentActivityLog from "../../components/common/DocumentActivityLog";
 import {
   DocumentCard,
@@ -16,6 +17,7 @@ import {
   documentInputClassName,
   documentPrimaryButtonClassName,
   documentSecondaryButtonClassName,
+  documentSelectTriggerClassName,
   documentTextareaClassName,
 } from "../../components/common/DocumentUI";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
@@ -37,6 +39,7 @@ import {
   StockOutDetail,
   StockOutItemInput,
 } from "../../types/types";
+import { GetErrorMessage } from "@/src/components/ShowErrorToast";
 
 const emptyItem = (): StockOutItemInput => ({
   medicine_id: null,
@@ -48,10 +51,10 @@ const emptyItem = (): StockOutItemInput => ({
 const formatDate = (value?: string | null) =>
   value
     ? new Date(value).toLocaleDateString(undefined, {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
     : "-";
 
 const StockOutDetails: React.FC = () => {
@@ -91,13 +94,13 @@ const StockOutDetails: React.FC = () => {
       try {
         const response = await fetchInventoryOverview();
         setInventoryItems(response.items.filter((item) => !item.is_expired));
-      } catch (error) {
-        console.error("Failed to load inventory batches for stock-out:", error);
+      } catch (error: unknown) {
+        showError(GetErrorMessage(error, "inventory", "load"));
       }
     };
 
     void loadInventory();
-  }, []);
+  }, [showError]);
 
   useEffect(() => {
     const loadSale = async () => {
@@ -133,8 +136,8 @@ const StockOutDetails: React.FC = () => {
           })),
         });
         setIsEditing(false);
-      } catch (error) {
-        showError("Failed to load stock-out document.");
+      } catch (error: unknown) {
+        showError(GetErrorMessage(error, "stock-out", "load"));
       } finally {
         setIsLoading(false);
       }
@@ -154,15 +157,15 @@ const StockOutDetails: React.FC = () => {
       try {
         const data = await fetchStockOutLogs(saleId);
         setLogs(data);
-      } catch (error) {
-        console.error("Stock-out logs load error:", error);
+      } catch (error: unknown) {
+        showError(GetErrorMessage(error, "stock-out", "load"));
       } finally {
         setIsLogsLoading(false);
       }
     };
 
     void loadLogs();
-  }, [isNewEntry, saleId]);
+  }, [isNewEntry, saleId, showError]);
 
   const medicineOptions = useMemo(() => {
     const unique = new Map<number, InventoryBatchItem>();
@@ -240,10 +243,6 @@ const StockOutDetails: React.FC = () => {
   const validateForm = () => {
     const errors: string[] = [];
 
-    if (!formData.invoice_number.trim()) {
-      errors.push("Invoice number is required.");
-    }
-
     formData.items.forEach((item, index) => {
       const label = `Row ${index + 1}`;
       if (!item.medicine_id) errors.push(`${label}: medicine is required.`);
@@ -282,7 +281,7 @@ const StockOutDetails: React.FC = () => {
         showSuccess(response.message || "Stock-out draft created.");
         const createdSale = response?.sale;
         navigate(
-          `/sales/stock-outs/${createdSale.posting_number}?id=${createdSale.id}`,
+          `/inventory/stock-outs/${createdSale.posting_number}?id=${createdSale.id}`,
           {
             state: { saleId: createdSale.id },
           },
@@ -296,8 +295,8 @@ const StockOutDetails: React.FC = () => {
         setIsEditing(false);
         showSuccess(response.message || "Stock-out draft updated.");
       }
-    } catch (error: any) {
-      showError(error?.response?.data?.error || "Failed to save stock-out.");
+    } catch (error: unknown) {
+      showError(GetErrorMessage(error, "stock-out", "save"));
     } finally {
       setIsSaving(false);
     }
@@ -323,8 +322,8 @@ const StockOutDetails: React.FC = () => {
       setCurrentStatusKey(response?.sale?.status_key || "posted");
       setIsEditing(false);
       showSuccess(response.message || "Stock-out posted successfully.");
-    } catch (error: any) {
-      showError(error?.response?.data?.error || "Failed to post stock-out.");
+    } catch (error: unknown) {
+      showError(GetErrorMessage(error, "stock-out", "post"));
     } finally {
       setIsPosting(false);
     }
@@ -350,8 +349,8 @@ const StockOutDetails: React.FC = () => {
       setCurrentStatusKey(response?.sale?.status_key || "cancelled");
       setIsEditing(false);
       showSuccess(response.message || "Stock-out cancelled successfully.");
-    } catch (error: any) {
-      showError(error?.response?.data?.error || "Failed to cancel stock-out.");
+    } catch (error: unknown) {
+      showError(GetErrorMessage(error, "stock-out", "cancel"));
     } finally {
       setIsCancelling(false);
     }
@@ -363,7 +362,7 @@ const StockOutDetails: React.FC = () => {
         eyebrow="Sales & Distribution"
         title={isNewEntry ? "Create Stock Out" : "Stock Out"}
         description="Issue medicine from inventory batches. Drafts can auto-allocate FIFO batches before posting."
-        onBack={() => navigate("/sales")}
+        onBack={() => navigate("/stock-outs")}
         meta={
           <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
             Ref: {!isNewEntry && postingNumber ? postingNumber : "Auto"}
@@ -371,6 +370,21 @@ const StockOutDetails: React.FC = () => {
         }
         actions={
           <>
+            {!isNewEntry && postingNumber && (
+              <button
+                type="button"
+                onClick={() =>
+                  navigate(
+                    `/inventory/stock-outs/${postingNumber}/print${
+                      saleId ? `?id=${saleId}` : ""
+                    }`,
+                  )
+                }
+                className={documentSecondaryButtonClassName}
+              >
+                Print
+              </button>
+            )}
             {canEditDraft && (
               <button
                 type="button"
@@ -485,7 +499,10 @@ const StockOutDetails: React.FC = () => {
           accent="blue"
         >
           <div className="grid gap-5 md:grid-cols-2">
-            <DocumentField label="Customer Name">
+            <DocumentField
+              label="Customer Name"
+              hint="Optional — leave blank for walk-in sales"
+            >
               <input
                 value={formData.customer_name}
                 onChange={(event) =>
@@ -495,7 +512,7 @@ const StockOutDetails: React.FC = () => {
                   }))
                 }
                 className={documentInputClassName}
-                placeholder="Walk-in customer or account name"
+                placeholder="Walk-in customer or account name (optional)"
                 disabled={!canEditForm}
               />
             </DocumentField>
@@ -509,7 +526,7 @@ const StockOutDetails: React.FC = () => {
                   }))
                 }
                 className={documentInputClassName}
-                placeholder="Receipt / invoice reference"
+                placeholder="Auto-generated on save (optional)"
                 disabled={!canEditForm}
               />
             </DocumentField>
@@ -583,26 +600,141 @@ const StockOutDetails: React.FC = () => {
               >
                 <div className="grid gap-4 md:grid-cols-4">
                   <DocumentField label={`Medicine ${index + 1}`}>
-                    <select
-                      value={item.medicine_id ?? ""}
-                      onChange={(event) =>
+                    <SearchableSelect
+                      options={medicineOptions.map((opt) => ({
+                        value: String(opt.medicine_id),
+                        label: opt.medicine_name,
+                        subtitle: `${opt.category} · ${opt.medicine_total_quantity} in stock`,
+                      }))}
+                      value={
+                        item.medicine_id != null ? String(item.medicine_id) : ""
+                      }
+                      onChange={(value) =>
                         setItemField(
                           index,
                           "medicine_id",
-                          event.target.value ? Number(event.target.value) : null,
+                          value ? Number(value) : null,
                         )
                       }
-                      className={documentInputClassName}
+                      placeholder="Search medicine..."
+                      triggerClassName={documentSelectTriggerClassName}
                       disabled={!canEditForm}
-                    >
-                      <option value="">Select medicine</option>
-                      {medicineOptions.map((option) => (
-                        <option key={option.medicine_id} value={option.medicine_id}>
-                          {option.medicine_name} ({option.medicine_total_quantity})
-                        </option>
-                      ))}
-                    </select>
+                      onCreateNew={() => navigate("/inventory/medicines/new-medicine")}
+                      createNewText="Add New Medicine"
+                    />
                   </DocumentField>
+                  {item.medicine_id != null &&
+                    (() => {
+                      const med = medicineOptions.find(
+                        (o) => o.medicine_id === item.medicine_id,
+                      );
+                      const batches = batchesByMedicine[item.medicine_id] ?? [];
+                      if (!med) return null;
+                      const statusColors: Record<string, string> = {
+                        in_stock:
+                          "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-900/30",
+                        low_stock:
+                          "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-900/30",
+                        expiring_soon:
+                          "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30",
+                        expired:
+                          "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30",
+                      };
+                      const statusColor =
+                        statusColors[med.status_key] ?? statusColors.in_stock;
+                      return (
+                        <div className="md:col-span-3 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-3">
+                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2.5">
+                            Stock Snapshot
+                          </p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Generic Name
+                              </span>
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                {med.generic_name || "—"}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Category
+                              </span>
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                {med.category || "—"}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Supplier
+                              </span>
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                {med.supplier || "—"}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Total Stock
+                              </span>
+                              <span className="text-xs font-black text-slate-900 dark:text-white">
+                                {med.medicine_total_quantity} units
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Selling Price
+                              </span>
+                              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                                {med.selling_price}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Unit Cost
+                              </span>
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                {med.unit_cost}
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Batches
+                              </span>
+                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                {batches.length} available
+                              </span>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                                Status
+                              </span>
+                              <span
+                                className={`inline-flex self-start items-center rounded border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${statusColor}`}
+                              >
+                                {med.status}
+                              </span>
+                            </div>
+                          </div>
+                          {batches[0] && (
+                            <p className="mt-2.5 text-[10px] text-slate-500 dark:text-slate-400">
+                              Next expiry:{" "}
+                              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                {formatDate(batches[0].expiry_date)}
+                              </span>
+                              {" · "}Batch:{" "}
+                              <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
+                                {(
+                                  batches[0] as InventoryBatchItem & {
+                                    inventory_batch_number?: string;
+                                  }
+                                ).inventory_batch_number ||
+                                  batches[0].batch_number}
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   <DocumentField label="Inventory Batch">
                     <select
                       value={item.batch_id ?? ""}
@@ -655,10 +787,11 @@ const StockOutDetails: React.FC = () => {
                   <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
                     Recommended inventory batch:{" "}
                     <span className="font-semibold text-emerald-600">
-                      {availableBatches[0].inventory_batch_number || availableBatches[0].batch_number}
+                      {availableBatches[0].inventory_batch_number ||
+                        availableBatches[0].batch_number}
                     </span>{" "}
-                    • received {formatDate(availableBatches[0].received_at)} • expires{" "}
-                    {formatDate(availableBatches[0].expiry_date)}
+                    • received {formatDate(availableBatches[0].received_at)} •
+                    expires {formatDate(availableBatches[0].expiry_date)}
                   </div>
                 )}
 

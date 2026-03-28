@@ -17,4 +17,10 @@ from tables.modle import (
     StockLedger,
     StockEntry,
     StockEntryItem,
+    StockAdjustment,
+    StockAdjustmentItem,
+    SalesReturn,
+    SalesReturnItem,
+    SupplierReturn,
+    SupplierReturnItem,
 )

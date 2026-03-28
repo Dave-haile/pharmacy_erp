@@ -12,21 +12,24 @@ import {
   Beaker,
   Boxes,
 } from "lucide-react";
-import SearchableSelect from "../components/SearchableSelect";
-import { useCategories, useSuppliers } from "../services/common";
-import { useToast } from "../hooks/useToast";
-import { useConfirmDialog } from "../hooks/useConfirmDialog";
-import { CreateMedicine, MedicineItem } from "../types/types";
-import { createMedicine } from "../services/medicines";
+import SearchableSelect from "@/src/components/SearchableSelect";
+import { useCategories, useSuppliers } from "@/src/services/common";
+import { useToast } from "@/src/hooks/useToast";
+import { useConfirmDialog } from "@/src/hooks/useConfirmDialog";
+import {
+  CreateMedicine as CreateMedicineType,
+  MedicineItem,
+} from "@/src/types/types";
+import { createMedicine } from "@/src/services/medicines";
 
-const CreateItem: React.FC = () => {
+const CreateMedicine: React.FC = () => {
   const location = useLocation();
   const duplicateItem = location.state?.duplicateItem as MedicineItem | null;
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categoryInputSearch, setCategoryInputSearch] = useState("");
   const [supplierInputSearch, setSupplierInputSearch] = useState("");
-  const [formData, setFormData] = useState<CreateMedicine>({
+  const [formData, setFormData] = useState<CreateMedicineType>({
     name: "",
     generic_name: "",
     barcode: "",
@@ -43,7 +46,7 @@ const CreateItem: React.FC = () => {
   const { showError, showSuccess } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const validateMedicineForm = (data: CreateMedicine): string[] => {
+  const validateMedicineForm = (data: CreateMedicineType): string[] => {
     const errors: string[] = [];
 
     const name = data.name.trim();
@@ -140,16 +143,19 @@ const CreateItem: React.FC = () => {
 
   type HandleChangeArg =
     | React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
-    | { name: keyof CreateMedicine; value: unknown };
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >
+    | { name: keyof CreateMedicineType; value: unknown };
 
   const handleChange = (arg: HandleChangeArg) => {
     try {
-      const normalize = (): { name: keyof CreateMedicine; value: unknown } => {
+      const normalize = (): {
+        name: keyof CreateMedicineType;
+        value: unknown;
+      } => {
         if (typeof arg === "object" && arg != null && "target" in arg) {
           const target = arg.target;
-          const name = target.name as keyof CreateMedicine;
+          const name = target.name as keyof CreateMedicineType;
           if (!name) {
             throw new Error("Missing input name attribute");
           }
@@ -158,14 +164,17 @@ const CreateItem: React.FC = () => {
             target instanceof HTMLInputElement &&
             target.type === "checkbox"
           ) {
-            return { name, value: target.checked };
+            return { name, value: target.checked as unknown };
           }
 
-          return { name, value: target.value };
+          return { name, value: target.value as unknown };
         }
 
         if (typeof arg === "object" && arg != null && "name" in arg) {
-          return { name: arg.name, value: arg.value };
+          return {
+            name: arg.name as keyof CreateMedicineType,
+            value: arg.value,
+          };
         }
 
         throw new Error("Unsupported change argument");
@@ -174,9 +183,9 @@ const CreateItem: React.FC = () => {
       const { name, value } = normalize();
 
       const coerce = (
-        field: keyof CreateMedicine,
+        field: keyof CreateMedicineType,
         raw: unknown,
-      ): CreateMedicine[keyof CreateMedicine] => {
+      ): CreateMedicineType[keyof CreateMedicineType] => {
         if (field === "category_id" || field === "supplier_id") {
           if (raw === "" || raw == null) return null;
           const n = Number(raw);
@@ -192,8 +201,9 @@ const CreateItem: React.FC = () => {
 
         // Default: keep string fields as strings (even for <input type="number" />)
         if (typeof raw === "string") return raw;
-        if (raw == null) return "" as CreateMedicine[keyof CreateMedicine];
-        return String(raw) as CreateMedicine[keyof CreateMedicine];
+        if (raw == null)
+          return "" as CreateMedicineType[keyof CreateMedicineType];
+        return String(raw) as CreateMedicineType[keyof CreateMedicineType];
       };
 
       setFormData((prev) => ({
@@ -261,10 +271,7 @@ const CreateItem: React.FC = () => {
         </div>
       </header>
 
-      <form
-        onSubmit={handleSubmit}
-        className="grid grid-cols-1 gap-10"
-      >
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-10">
         {/* Main Content Area */}
         <div className="lg:col-span-8 space-y-10">
           <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-blue-500/20 shadow-2xl shadow-blue-500/5 overflow-hidden">
@@ -381,7 +388,7 @@ const CreateItem: React.FC = () => {
                       placeholder="Select Category"
                       className="w-full"
                       triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-                      onCreateNew={() => navigate("/items/new")}
+                      onCreateNew={() => navigate("/inventory/categories/new")}
                       createNewText="Add New Category"
                     />
                   </div>
@@ -496,4 +503,4 @@ const CreateItem: React.FC = () => {
   );
 };
 
-export default CreateItem;
+export default CreateMedicine;

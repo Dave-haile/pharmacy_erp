@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import DataTable, { Column } from "../components/DataTable";
+import DataTable, { Column } from "../../components/DataTable";
 import {
   DocumentField,
   DocumentHeader,
@@ -9,9 +9,9 @@ import {
   DocumentSummaryCard,
   documentInputClassName,
   documentPrimaryButtonClassName,
-} from "../components/common/DocumentUI";
-import { fetchInventoryOverview } from "../services/inventory";
-import { InventoryBatchItem, InventoryOverviewResponse } from "../types/types";
+} from "../../components/common/DocumentUI";
+import { fetchInventoryOverview } from "../../services/inventory";
+import { InventoryBatchItem, InventoryOverviewResponse } from "../../types/types";
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString(undefined, {

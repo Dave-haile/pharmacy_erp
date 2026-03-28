@@ -192,7 +192,7 @@ const StockOutRegistry: React.FC = () => {
         onBack={() => navigate("/dashboard")}
         actions={
           <button
-            onClick={() => navigate("/inventory/sales/stock-outs/new-stock-out")}
+            onClick={() => navigate("/inventory/stock-outs/new-stock-out")}
             className={documentPrimaryButtonClassName}
           >
             New Stock Out
@@ -240,7 +240,7 @@ const StockOutRegistry: React.FC = () => {
         onRefresh={loadItems}
         filters={filtersContent}
         onRowClick={(item) =>
-          navigate(`/inventory/sales/stock-outs/${item.posting_number}?id=${item.id}`, {
+          navigate(`/inventory/stock-outs/${item.posting_number}?id=${item.id}`, {
             state: { saleId: item.id },
           })
         }

@@ -1,4 +1,4 @@
-export const getErrorMessage = (
+export const GetErrorMessage = (
   error: unknown,
   type: string,
   event: string,

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import SearchableSelect from "../components/SearchableSelect";
-import DataTable, { Column } from "../components/DataTable";
-import { useToast } from "../hooks/useToast";
-import { fetchMedicines } from "../services/medicines";
-import { MedicineItem } from "../types/types";
+import SearchableSelect from "../../components/SearchableSelect";
+import DataTable, { Column } from "../../components/DataTable";
+import { useToast } from "../../hooks/useToast";
+import { fetchMedicines } from "../../services/medicines";
+import { MedicineItem } from "../../types/types";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useCategories } from "../services/common";
-import { fetchSuppliers } from "../services/suppler";
+import { useCategories } from "../../services/common";
+import { fetchSuppliers } from "../../services/suppler";
 
 const ItemMaster: React.FC = () => {
   const [categoryInputSearch, setCategoryInputSearch] = useState("");
@@ -257,7 +257,7 @@ const ItemMaster: React.FC = () => {
               placeholder="Select Category"
               className="w-full"
               triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-              onCreateNew={() => navigate("/inventory/medicine-categories/new")}
+              onCreateNew={() => navigate("/inventory/categories/new")}
               createNewText="Add New Medicine Category"
             />
           </div>

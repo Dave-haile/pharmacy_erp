@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { analyzeBatchRisk } from '../services/geminiService';
+import { analyzeBatchRisk } from '@/src/services/geminiService';
 
 const AIAnalysis: React.FC = () => {
   const location = useLocation();

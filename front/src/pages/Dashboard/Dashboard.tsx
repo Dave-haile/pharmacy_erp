@@ -14,10 +14,10 @@ import {
   Pie,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
-import StatCard from "../components/StatCard";
-import api from "../services/api";
-import { useTheme } from "../components/context/ThemeContext";
-import PageMeta from "../components/common/PageMeta";
+import StatCard from "@/src/components/StatCard";
+import api from "@/src/services/api";
+import { useTheme } from "@/src/components/context/ThemeContext";
+import PageMeta from "@/src/components/common/PageMeta";
 
 // Existing Monthly Production/Sales Data
 const monthlyData = [

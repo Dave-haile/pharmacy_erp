@@ -24,12 +24,12 @@ const navItems = [
     label: "Quality Control",
     icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
   },
-  // {
-  //   path: "/sales",
-  //   label: "Sales & Orders",
-  //   icon: "M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z",
-  // },
-  { path: '/audit-logs', label: 'Audit Logs', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+
+  {
+    path: "/audit-logs",
+    label: "Audit Logs",
+    icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+  },
   {
     path: "/ai-insights",
     label: "AI Risk Analyzer",

@@ -29,11 +29,13 @@ const Calendar: FC<CalendarProps> = ({
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const nextMonth = (e: MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     setCurrentMonth(addMonths(currentMonth, 1));
   };
 
   const prevMonth = (e: MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     setCurrentMonth(subMonths(currentMonth, 1));
   };
@@ -57,12 +59,14 @@ const Calendar: FC<CalendarProps> = ({
         </div>
         <div className="flex items-center gap-1">
           <button
+            type="button"
             onClick={prevMonth}
             className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-[#64748b] dark:text-[#94a3b8] hover:text-[#0f172a] dark:hover:text-[#f8fafc] transition-colors border border-transparent hover:border-[#e2e8f0] dark:hover:border-[#1e293b]"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
           </button>
           <button
+            type="button"
             onClick={nextMonth}
             className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-[#64748b] dark:text-[#94a3b8] hover:text-[#0f172a] dark:hover:text-[#f8fafc] transition-colors border border-transparent hover:border-[#e2e8f0] dark:hover:border-[#1e293b]"
           >
@@ -89,6 +93,7 @@ const Calendar: FC<CalendarProps> = ({
 
           return (
             <button
+              type="button"
               key={i}
               onClick={() => onDateSelect(startOfDay(date))}
               className={`
@@ -111,6 +116,7 @@ const Calendar: FC<CalendarProps> = ({
 
       <div className="mt-4 pt-3 border-t border-[#e2e8f0] dark:border-[#1e293b] flex justify-between items-center">
         <button
+          type="button"
           onClick={() => onDateSelect(new Date())}
           className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest hover:text-indigo-500 dark:hover:text-indigo-300 transition-colors"
         >

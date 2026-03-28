@@ -25,10 +25,16 @@ from tables.modle import (
     PurchaseItem,
     Sale,
     SaleItem,
+    SalesReturn,
+    SalesReturnItem,
+    StockAdjustment,
+    StockAdjustmentItem,
     StockEntry,
     StockEntryItem,
     StockLedger,
     Supplier,
+    SupplierReturn,
+    SupplierReturnItem,
 )
 from tables.modle.user_log import UserLog
 
@@ -39,6 +45,13 @@ class DashboardStatsView:
 
 EXPIRY_SOON_DEFAULT_DAYS = 90
 LOW_STOCK_DEFAULT_THRESHOLD = 10
+
+
+def _require_roles(request, allowed_roles):
+    role = getattr(request.user, "role", None)
+    if role in allowed_roles:
+        return None
+    return JsonResponse({"error": "You do not have permission to perform this action."}, status=403)
 
 
 def _compact_text(value):
@@ -373,6 +386,264 @@ def inventory_list(request):
             "total_count": len(items),
         }
     )
+
+
+def _serialize_stock_ledger(entry: StockLedger):
+    medicine = entry.medicine
+    batch = entry.batch
+    return {
+        "transaction_id": entry.transaction_id,
+        "transaction_type": entry.transaction_type,
+        "medicine_id": medicine.id if medicine else None,
+        "medicine_name": medicine.name if medicine else "",
+        "batch_id": batch.batch_id if batch else None,
+        "batch_number": batch.batch_number if batch else "",
+        "quantity": entry.quantity,
+        "unit_price": str(entry.unit_price),
+        "reference_document": entry.reference_document,
+        "notes": entry.notes,
+        "created_at": entry.created_at.isoformat(),
+    }
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stock_ledger_list(request):
+    try:
+        page_size = int(request.GET.get("page_size", 20))
+        page = int(request.GET.get("page", 1))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Invalid pagination values."}, status=400)
+
+    page_size = max(1, min(page_size, 100))
+    page = max(1, page)
+
+    medicine_id = request.GET.get("medicine_id")
+    batch_id = request.GET.get("batch_id")
+    transaction_type = _compact_text(request.GET.get("transaction_type", "")).lower()
+    reference = _compact_text(request.GET.get("reference", ""))
+    q = _compact_text(request.GET.get("q", ""))
+
+    try:
+        start_date = (
+            _parse_date_value(request.GET.get("start_date"), "start_date")
+            if request.GET.get("start_date")
+            else None
+        )
+        end_date = (
+            _parse_date_value(request.GET.get("end_date"), "end_date")
+            if request.GET.get("end_date")
+            else None
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    queryset = StockLedger.objects.select_related("medicine", "batch").all()
+
+    if start_date:
+        queryset = queryset.filter(created_at__date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(created_at__date__lte=end_date)
+    if medicine_id:
+        queryset = queryset.filter(medicine_id=medicine_id)
+    if batch_id:
+        queryset = queryset.filter(batch_id=batch_id)
+    if transaction_type:
+        queryset = queryset.filter(transaction_type=transaction_type)
+    if reference:
+        queryset = queryset.filter(reference_document__icontains=reference)
+    if q:
+        queryset = queryset.filter(
+            Q(reference_document__icontains=q)
+            | Q(notes__icontains=q)
+            | Q(medicine__name__icontains=q)
+            | Q(batch__batch_number__icontains=q)
+        )
+
+    queryset = queryset.order_by("-created_at", "-transaction_id")
+    paginator = Paginator(queryset, page_size)
+
+    try:
+        entries_page = paginator.page(page)
+    except EmptyPage:
+        entries_page = paginator.page(1)
+
+    return JsonResponse(
+        {
+            "results": [_serialize_stock_ledger(entry) for entry in entries_page],
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "current_page": entries_page.number,
+            "page_size": page_size,
+            "has_next": entries_page.has_next(),
+            "has_previous": entries_page.has_previous(),
+        }
+    )
+
+
+def _serialize_purchase(purchase: Purchase, include_items=False):
+    payload = {
+        "id": purchase.id,
+        "supplier_id": purchase.supplier_id,
+        "supplier": purchase.supplier.name if purchase.supplier else "",
+        "status": purchase.status,
+        "tax": str(purchase.tax),
+        "total_cost": str(purchase.total_cost),
+        "grand_total": str(purchase.grand_total),
+        "notes": purchase.notes,
+        "received_by_id": purchase.received_by_id,
+        "received_by": getattr(purchase.received_by, "email", ""),
+        "created_at": purchase.created_at.isoformat(),
+        "updated_at": purchase.updated_at.isoformat(),
+    }
+    if include_items:
+        payload["items"] = [
+            {
+                "id": item.id,
+                "medicine_id": item.medicine_id,
+                "medicine_name": item.medicine.name if item.medicine else "",
+                "quantity": item.quantity,
+                "cost_price": str(item.cost_price),
+                "batch_id": item.batch_id,
+                "batch_number": item.batch.batch_number if item.batch else "",
+                "expiry_date": item.expiry_date.isoformat(),
+            }
+            for item in purchase.items.select_related("medicine", "batch").all()
+        ]
+    return payload
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def purchases_list(request):
+    page_size = int(request.GET.get("page_size", 10))
+    page = int(request.GET.get("page", 1))
+    supplier = _compact_text(request.GET.get("supplier", ""))
+    status = _compact_text(request.GET.get("status", "")).lower()
+
+    queryset = Purchase.objects.select_related("supplier", "received_by").order_by(
+        "-created_at"
+    )
+    if supplier:
+        queryset = queryset.filter(supplier__name__icontains=supplier)
+    if status:
+        queryset = queryset.filter(status=status)
+
+    paginator = Paginator(queryset, page_size)
+    try:
+        page_obj = paginator.page(page)
+    except EmptyPage:
+        page_obj = paginator.page(1)
+
+    return JsonResponse(
+        {
+            "results": [_serialize_purchase(purchase) for purchase in page_obj.object_list],
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number,
+            "page_size": page_size,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def purchase_detail(request, purchase_id: int):
+    try:
+        purchase = (
+            Purchase.objects.select_related("supplier", "received_by")
+            .prefetch_related("items__medicine", "items__batch")
+            .get(id=purchase_id)
+        )
+    except Purchase.DoesNotExist:
+        return JsonResponse({"error": "Purchase not found."}, status=404)
+    return JsonResponse(_serialize_purchase(purchase, include_items=True))
+
+
+def _serialize_grn(grn: GoodRecivingNote, include_items=False):
+    payload = {
+        "id": grn.good_reciving_note_id,
+        "good_reciving_note_id": grn.good_reciving_note_id,
+        "purchase_id": grn.purchase_id,
+        "supplier_id": grn.supplier_id_id,
+        "supplier": grn.supplier_id.name if grn.supplier_id else "",
+        "invoice_number": grn.invoice_number,
+        "total_amount": str(grn.total_amount),
+        "received_by_id": grn.received_by_id,
+        "received_by": getattr(grn.received_by, "email", ""),
+        "received_at": grn.received_at.isoformat(),
+        "notes": grn.notes or "",
+    }
+    if include_items:
+        payload["items"] = [
+            {
+                "id": item.id,
+                "medicine_id": item.medicine_id,
+                "medicine_name": item.medicine.name if item.medicine else "",
+                "quantity": item.quantity,
+                "unit_price": str(item.unit_price),
+                "total_price": str(item.total_price),
+                "batch_id": item.batch_number_id,
+                "batch_number": item.batch_number.batch_number if item.batch_number else "",
+                "expiry_date": item.expiry_date.isoformat(),
+            }
+            for item in GoodRecivingNoteItem.objects.select_related(
+                "medicine", "batch_number"
+            )
+            .filter(good_reciving_note_id=grn.good_reciving_note_id)
+            .all()
+        ]
+    return payload
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def grn_list(request):
+    page_size = int(request.GET.get("page_size", 10))
+    page = int(request.GET.get("page", 1))
+    invoice_number = _compact_text(request.GET.get("invoice_number", ""))
+    supplier = _compact_text(request.GET.get("supplier", ""))
+
+    queryset = GoodRecivingNote.objects.select_related(
+        "purchase", "received_by", "supplier_id"
+    ).order_by("-received_at")
+    if invoice_number:
+        queryset = queryset.filter(invoice_number__icontains=invoice_number)
+    if supplier:
+        queryset = queryset.filter(supplier_id__name__icontains=supplier)
+
+    paginator = Paginator(queryset, page_size)
+    try:
+        page_obj = paginator.page(page)
+    except EmptyPage:
+        page_obj = paginator.page(1)
+
+    return JsonResponse(
+        {
+            "results": [_serialize_grn(grn) for grn in page_obj.object_list],
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number,
+            "page_size": page_size,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def grn_detail(request, grn_id: int):
+    try:
+        grn = GoodRecivingNote.objects.select_related(
+            "purchase", "received_by", "supplier_id"
+        ).get(good_reciving_note_id=grn_id)
+    except GoodRecivingNote.DoesNotExist:
+        return JsonResponse({"error": "GRN not found."}, status=404)
+
+    return JsonResponse(_serialize_grn(grn, include_items=True))
 
 
 @api_view(["GET"])
@@ -840,17 +1111,23 @@ def _post_stock_entry(stock_entry):
     created_items = []
 
     for item in draft_items:
-        batch, created = Batches.objects.get_or_create(
-            batch_number=item.batch_number,
-            defaults={
-                "product_id": item.medicine,
-                "expiry_date": item.expiry_date,
-                "manufacturing_date": item.manufacturing_date,
-                "quantity": item.quantity,
-                "purchase_price": item.unit_price,
-                "supplier_id": supplier,
-            },
+        batch = (
+            Batches.objects.select_for_update()
+            .filter(batch_number=item.batch_number)
+            .first()
         )
+        created = False
+        if not batch:
+            batch = Batches.objects.create(
+                batch_number=item.batch_number,
+                product_id=item.medicine,
+                expiry_date=item.expiry_date,
+                manufacturing_date=item.manufacturing_date,
+                quantity=0,
+                purchase_price=item.unit_price,
+                supplier_id=supplier,
+            )
+            created = True
 
         if not created:
             if batch.product_id_id != item.medicine_id:
@@ -864,21 +1141,33 @@ def _post_stock_entry(stock_entry):
             batch.supplier_id = supplier
             batch.quantity += item.quantity
             batch.save()
+        else:
+            batch.quantity = item.quantity
+            batch.save(update_fields=["quantity"])
 
-        inventory_row, inventory_created = Inventory.objects.get_or_create(
-            medicine=item.medicine,
-            batch_number=item.batch_number,
-            defaults={
-                "quantity": item.quantity,
-                "expiry_date": item.expiry_date,
-                "location": "Main Store",
-            },
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine=item.medicine, batch_number=item.batch_number)
+            .first()
         )
+        inventory_created = False
+        if not inventory_row:
+            inventory_row = Inventory.objects.create(
+                medicine=item.medicine,
+                batch_number=item.batch_number,
+                quantity=0,
+                expiry_date=item.expiry_date,
+                location="Main Store",
+            )
+            inventory_created = True
 
         if not inventory_created:
             inventory_row.quantity += item.quantity
             inventory_row.expiry_date = item.expiry_date
             inventory_row.save()
+        else:
+            inventory_row.quantity = item.quantity
+            inventory_row.save(update_fields=["quantity", "updated_at"])
 
         purchase_item = PurchaseItem.objects.create(
             purchase=purchase,
@@ -905,6 +1194,7 @@ def _post_stock_entry(stock_entry):
         StockLedger.objects.create(
             medicine=item.medicine,
             batch=batch,
+            transaction_type=StockLedger.TRANSACTION_PURCHASE,
             quantity=item.quantity,
             unit_price=item.unit_price,
             reference_document=stock_entry.invoice_number,
@@ -972,7 +1262,7 @@ def _reverse_posted_stock_entry(stock_entry):
         if not item.batch_id or not item.batch:
             raise ValueError(f"Batch link is missing for item '{item.medicine.name}'.")
 
-        batch = item.batch
+        batch = Batches.objects.select_for_update().get(pk=item.batch_id)
         if batch.quantity < item.quantity:
             raise ValueError(
                 f"Cannot cancel stock entry because batch {batch.batch_number} "
@@ -982,15 +1272,13 @@ def _reverse_posted_stock_entry(stock_entry):
         batch.quantity -= item.quantity
         batch.save(update_fields=["quantity"])
 
-        try:
-            inventory_row = Inventory.objects.get(
-                medicine=item.medicine,
-                batch_number=item.batch_number,
-            )
-        except Inventory.DoesNotExist as exc:
-            raise ValueError(
-                f"Inventory record is missing for batch {item.batch_number}."
-            ) from exc
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine=item.medicine, batch_number=item.batch_number)
+            .first()
+        )
+        if not inventory_row:
+            raise ValueError(f"Inventory record is missing for batch {item.batch_number}.")
 
         if inventory_row.quantity < item.quantity:
             raise ValueError(
@@ -1008,6 +1296,7 @@ def _reverse_posted_stock_entry(stock_entry):
         StockLedger.objects.create(
             medicine=item.medicine,
             batch=batch,
+            transaction_type=StockLedger.TRANSACTION_PURCHASE,
             quantity=-item.quantity,
             unit_price=item.unit_price,
             reference_document=stock_entry.invoice_number,
@@ -1152,9 +1441,6 @@ def _normalize_sale_payload(payload):
     notes = (payload.get("notes") or "").strip()
     items = payload.get("items") or []
 
-    if not invoice_number:
-        raise ValueError("Invoice number is required.")
-
     if not isinstance(items, list) or len(items) == 0:
         raise ValueError("At least one stock-out item is required.")
 
@@ -1185,11 +1471,13 @@ def _normalize_sale_payload(payload):
         )
 
         if batch_id:
+            today = timezone.localdate()
             try:
                 batch = Batches.objects.get(
                     pk=batch_id,
                     product_id=medicine,
                     quantity__gt=0,
+                    expiry_date__gt=today,
                 )
             except Batches.DoesNotExist as exc:
                 raise ValueError(f"{prefix}: selected batch is not available.") from exc
@@ -1213,28 +1501,31 @@ def _normalize_sale_payload(payload):
             continue
 
         remaining_quantity = quantity
-        fifo_batches = list(
+        fefo_batches = list(
             Batches.objects.filter(
                 product_id=medicine,
                 quantity__gt=0,
                 expiry_date__gt=timezone.localdate(),
             ).order_by(
-                "created_at", "manufacturing_date", "expiry_date", "batch_number"
+                "expiry_date",
+                "manufacturing_date",
+                "created_at",
+                "batch_number",
             )
         )
 
-        if not fifo_batches:
+        if not fefo_batches:
             raise ValueError(
                 f"{prefix}: no sellable batches are available for {medicine.name}."
             )
 
-        available_quantity = sum(batch.quantity for batch in fifo_batches)
+        available_quantity = sum(batch.quantity for batch in fefo_batches)
         if available_quantity < quantity:
             raise ValueError(
                 f"{prefix}: only {available_quantity} units are available for {medicine.name}."
             )
 
-        for batch in fifo_batches:
+        for batch in fefo_batches:
             if remaining_quantity <= 0:
                 break
 
@@ -1286,11 +1577,35 @@ def _post_sale(sale):
 
     reversed_items = []
 
+    batch_ids = sorted({item.batch_id for item in sale_items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more allocated batches are no longer available.")
+
+    inventory_keys = sorted(
+        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in sale_items}
+    )
+    locked_inventory = {}
+    for medicine_id, batch_number in inventory_keys:
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine_id=medicine_id, batch_number=batch_number)
+            .first()
+        )
+        if not inventory_row:
+            raise ValueError(f"Inventory record is missing for batch {batch_number}.")
+        locked_inventory[(medicine_id, batch_number)] = inventory_row
+
     for item in sale_items:
         if not item.batch_id or not item.batch:
             raise ValueError(f"Batch allocation is missing for '{item.medicine.name}'.")
 
-        batch = item.batch
+        batch = locked_batches.get(item.batch_id)
+        if not batch:
+            raise ValueError(f"Batch allocation is missing for '{item.medicine.name}'.")
         if batch.quantity < item.quantity:
             raise ValueError(
                 f"Batch {batch.batch_number} no longer has enough stock to complete this sale."
@@ -1299,15 +1614,9 @@ def _post_sale(sale):
         batch.quantity -= item.quantity
         batch.save(update_fields=["quantity"])
 
-        try:
-            inventory_row = Inventory.objects.get(
-                medicine=item.medicine,
-                batch_number=batch.batch_number,
-            )
-        except Inventory.DoesNotExist as exc:
-            raise ValueError(
-                f"Inventory record is missing for batch {batch.batch_number}."
-            ) from exc
+        inventory_row = locked_inventory.get((item.medicine_id, batch.batch_number))
+        if not inventory_row:
+            raise ValueError(f"Inventory record is missing for batch {batch.batch_number}.")
 
         if inventory_row.quantity < item.quantity:
             raise ValueError(
@@ -1323,6 +1632,7 @@ def _post_sale(sale):
         StockLedger.objects.create(
             medicine=item.medicine,
             batch=batch,
+            transaction_type=StockLedger.TRANSACTION_SALE,
             quantity=-item.quantity,
             unit_price=item.price_at_sale,
             reference_document=sale.invoice_number,
@@ -1368,32 +1678,60 @@ def _reverse_posted_sale(sale):
 
     restored_items = []
 
+    batch_ids = sorted({item.batch_id for item in sale_items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more allocated batches are no longer available.")
+    inventory_keys = sorted(
+        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in sale_items}
+    )
+    locked_inventory = {}
+    for medicine_id, batch_number in inventory_keys:
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine_id=medicine_id, batch_number=batch_number)
+            .first()
+        )
+        if inventory_row:
+            locked_inventory[(medicine_id, batch_number)] = inventory_row
+
     for item in sale_items:
         if not item.batch_id or not item.batch:
             raise ValueError(f"Batch allocation is missing for '{item.medicine.name}'.")
 
-        batch = item.batch
+        batch = locked_batches.get(item.batch_id)
+        if not batch:
+            raise ValueError(f"Batch allocation is missing for '{item.medicine.name}'.")
         batch.quantity += item.quantity
         batch.save(update_fields=["quantity"])
 
-        inventory_row, created = Inventory.objects.get_or_create(
-            medicine=item.medicine,
-            batch_number=batch.batch_number,
-            defaults={
-                "quantity": item.quantity,
-                "expiry_date": batch.expiry_date,
-                "location": "Main Store",
-            },
-        )
+        inventory_row = locked_inventory.get((item.medicine_id, batch.batch_number))
+        created = False
+        if not inventory_row:
+            inventory_row = Inventory.objects.create(
+                medicine=item.medicine,
+                batch_number=batch.batch_number,
+                quantity=0,
+                expiry_date=batch.expiry_date,
+                location="Main Store",
+            )
+            created = True
 
         if not created:
             inventory_row.quantity += item.quantity
             inventory_row.expiry_date = batch.expiry_date
             inventory_row.save(update_fields=["quantity", "expiry_date", "updated_at"])
+        else:
+            inventory_row.quantity = item.quantity
+            inventory_row.save(update_fields=["quantity", "updated_at"])
 
         StockLedger.objects.create(
             medicine=item.medicine,
             batch=batch,
+            transaction_type=StockLedger.TRANSACTION_SALE,
             quantity=item.quantity,
             unit_price=item.price_at_sale,
             reference_document=sale.invoice_number,
@@ -1512,6 +1850,9 @@ def medicines_list(request):
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def medicines_update(request, medicine_id):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         try:
             medicine = Medicine.objects.get(id=medicine_id)
@@ -1639,6 +1980,9 @@ def medicines_update(request, medicine_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def medicines_create(request):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         medicine_data = request.data
         with transaction.atomic():
@@ -1699,33 +2043,66 @@ def medicines_create(request):
         return JsonResponse({"error": str(e)}, status=400)
 
 
+def _serialize_category(category):
+    return {
+        "id": category.id,
+        "name": category.name,
+        "category_name": category.category_name,
+        "naming_series": category.naming_series,
+        "description": category.description,
+        "parent_category_id": category.parent_category_id,
+        "parent_category_name": (
+            category.parent_category.name if category.parent_category else None
+        ),
+        "medicine_count": getattr(category, "medicine_count", 0),
+        "child_count": getattr(category, "child_count", 0),
+        "created_at": category.created_at.isoformat(),
+    }
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def medicine_categories_list(request):
-    page_size = int(request.GET.get("page_size", 5))
+    page_size = int(request.GET.get("page_size", 10))
     page = int(request.GET.get("page", 1))
-
-    # Get filter parameters
     search = request.GET.get("search", "")
+    name = request.GET.get("name", "")
+    description = request.GET.get("description", "")
+    parent_category = request.GET.get("parent_category", "")
 
-    cache_key = f"categories:{page}:{page_size}:{search}"
+    cache_key = (
+        f"categories:{page}:{page_size}:{search}:{name}:{description}:{parent_category}"
+    )
     cached_response = cache.get(cache_key)
     if cached_response:
         return JsonResponse(cached_response)
 
-    # Build queryset
-    queryset = Category.objects.all()
+    queryset = (
+        Category.objects.select_related("parent_category")
+        .annotate(
+            medicine_count=Count("medicines", distinct=True),
+            child_count=Count("category", distinct=True),
+        )
+        .all()
+    )
 
-    # Apply filters
     if search:
         queryset = queryset.filter(
-            Q(name__icontains=search) | Q(description__icontains=search)
+            Q(name__icontains=search)
+            | Q(category_name__icontains=search)
+            | Q(description__icontains=search)
+            | Q(parent_category__name__icontains=search)
         )
+    if name:
+        queryset = queryset.filter(
+            Q(name__icontains=name) | Q(category_name__icontains=name)
+        )
+    if description:
+        queryset = queryset.filter(description__icontains=description)
+    if parent_category:
+        queryset = queryset.filter(parent_category_id=parent_category)
 
-    # Order by creation date (newest first)
     queryset = queryset.order_by("-created_at")
-
-    # Create paginator
     paginator = Paginator(queryset, page_size)
 
     try:
@@ -1733,17 +2110,7 @@ def medicine_categories_list(request):
     except EmptyPage:
         categories_page = paginator.page(1)
 
-    # Serialize data
-    categories_data = []
-    for category in categories_page:
-        categories_data.append(
-            {
-                "id": category.id,
-                "name": category.name,
-                "description": category.description,
-                "created_at": category.created_at.isoformat(),
-            }
-        )
+    categories_data = [_serialize_category(category) for category in categories_page]
 
     response_data = {
         "results": categories_data,
@@ -1755,10 +2122,204 @@ def medicine_categories_list(request):
         "has_previous": categories_page.has_previous(),
     }
 
-    # Cache for 5 minutes (ERP safety)
     cache.set(cache_key, response_data, timeout=300)
 
     return JsonResponse(response_data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def category_create(request):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+    try:
+        category_data = request.data
+        parent_category_id = category_data.get("parent_category_id")
+
+        if not _compact_text(category_data.get("name")):
+            return JsonResponse({"error": "Category name is required."}, status=400)
+
+        with transaction.atomic():
+            category = Category(
+                name=_compact_text(category_data.get("name")),
+                category_name=_compact_text(category_data.get("category_name")) or None,
+                description=category_data.get("description") or "",
+                parent_category_id=parent_category_id or None,
+            )
+            category.save()
+
+            UserLog.objects.create(
+                user=request.user,
+                action="Category Created",
+                details=json.dumps(
+                    {
+                        "category_id": category.id,
+                        "naming_series": category.naming_series,
+                        "name": category.name,
+                        "category_name": category.category_name,
+                        "parent_category_id": category.parent_category_id,
+                    },
+                    default=str,
+                ),
+            )
+
+        cache.clear()
+        category = (
+            Category.objects.select_related("parent_category")
+            .annotate(
+                medicine_count=Count("medicines", distinct=True),
+                child_count=Count("category", distinct=True),
+            )
+            .get(pk=category.id)
+        )
+
+        return JsonResponse(
+            {
+                "message": "Category created successfully",
+                "category": _serialize_category(category),
+            },
+            status=201,
+        )
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def category_detail(request, category_id):
+    try:
+        category = (
+            Category.objects.select_related("parent_category")
+            .annotate(
+                medicine_count=Count("medicines", distinct=True),
+                child_count=Count("category", distinct=True),
+            )
+            .get(pk=category_id)
+        )
+    except Category.DoesNotExist:
+        return JsonResponse({"error": "Category not found"}, status=404)
+
+    return JsonResponse(_serialize_category(category))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def category_detail_by_naming_series(request, naming_series):
+    try:
+        category = (
+            Category.objects.select_related("parent_category")
+            .annotate(
+                medicine_count=Count("medicines", distinct=True),
+                child_count=Count("category", distinct=True),
+            )
+            .get(naming_series=naming_series)
+        )
+    except Category.DoesNotExist:
+        return JsonResponse({"error": "Category not found"}, status=404)
+
+    return JsonResponse(_serialize_category(category))
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def category_update(request, category_id):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+    try:
+        category = Category.objects.get(pk=category_id)
+    except Category.DoesNotExist:
+        return JsonResponse({"error": "Category not found"}, status=404)
+
+    try:
+        category_data = request.data
+        original = {
+            "name": category.name,
+            "category_name": category.category_name,
+            "description": category.description,
+            "parent_category_id": category.parent_category_id,
+        }
+
+        with transaction.atomic():
+            if "name" in category_data:
+                category.name = _compact_text(category_data.get("name"))
+            if "category_name" in category_data:
+                category.category_name = (
+                    _compact_text(category_data.get("category_name")) or None
+                )
+            if "description" in category_data:
+                category.description = category_data.get("description") or ""
+            if "parent_category_id" in category_data:
+                parent_category_id = category_data.get("parent_category_id")
+                parent_category_id = parent_category_id or None
+                if parent_category_id == category.id:
+                    return JsonResponse(
+                        {"error": "Category cannot be its own parent."}, status=400
+                    )
+                category.parent_category_id = parent_category_id
+
+            if not _compact_text(category.name):
+                return JsonResponse({"error": "Category name is required."}, status=400)
+
+            category.save()
+
+            updated = {
+                "name": category.name,
+                "category_name": category.category_name,
+                "description": category.description,
+                "parent_category_id": category.parent_category_id,
+            }
+            changes = {}
+            for field, old_value in original.items():
+                new_value = updated[field]
+                if old_value != new_value:
+                    changes[field] = {"from": old_value, "to": new_value}
+
+            UserLog.objects.create(
+                user=request.user,
+                action="Category Updated",
+                details=json.dumps(
+                    {
+                        "category_id": category.id,
+                        "changes": changes,
+                    },
+                    default=str,
+                ),
+            )
+
+        cache.clear()
+        category = (
+            Category.objects.select_related("parent_category")
+            .annotate(
+                medicine_count=Count("medicines", distinct=True),
+                child_count=Count("category", distinct=True),
+            )
+            .get(pk=category.id)
+        )
+
+        return JsonResponse(
+            {
+                "message": "Category updated successfully",
+                "category": _serialize_category(category),
+            }
+        )
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def category_logs(request, category_id):
+    try:
+        Category.objects.get(pk=category_id)
+    except Category.DoesNotExist:
+        return JsonResponse({"error": "Category not found"}, status=404)
+
+    logs = UserLog.objects.select_related("user").order_by("-timestamp")
+    matched_logs = _filter_logs_for_entity(logs, "category_id", category_id)
+    serialized_logs = [_serialize_user_log(log) for log in matched_logs[:20]]
+    return JsonResponse({"results": serialized_logs})
 
 
 @api_view(["GET"])
@@ -1892,6 +2453,9 @@ def supplier_list(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def supplier_create(request):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         normalized = _normalize_supplier_payload(request.data)
         with transaction.atomic():
@@ -1951,6 +2515,9 @@ def supplier_detail_by_naming_series(request, naming_series):
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def supplier_update(request, supplier_id):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         try:
             supplier = Supplier.objects.get(id=supplier_id)
@@ -2025,6 +2592,9 @@ def supplier_logs(request, supplier_id):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def supplier_cancel(request, supplier_id):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         supplier = Supplier.objects.get(id=supplier_id)
     except Supplier.DoesNotExist:
@@ -2239,6 +2809,9 @@ def stock_entry_update(request, stock_entry_id: int):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def stock_entry_submit(request, stock_entry_id: int):
+    denied = _require_roles(request, {"admin", "manager", "pharmacist"})
+    if denied:
+        return denied
     try:
         with transaction.atomic():
             stock_entry = (
@@ -2297,6 +2870,9 @@ def stock_entry_submit(request, stock_entry_id: int):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def stock_entry_cancel(request, stock_entry_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         with transaction.atomic():
             stock_entry = (
@@ -2540,7 +3116,8 @@ def stock_out_update(request, sale_id: int):
         normalized = _normalize_sale_payload(request.data)
         with transaction.atomic():
             sale.customer_name = normalized["customer_name"]
-            sale.invoice_number = normalized["invoice_number"]
+            if normalized["invoice_number"]:
+                sale.invoice_number = normalized["invoice_number"]
             sale.payment_method = normalized["payment_method"]
             sale.total_amount = normalized["total_amount"]
             sale.notes = normalized["notes"]
@@ -2588,6 +3165,9 @@ def stock_out_update(request, sale_id: int):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def stock_out_submit(request, sale_id: int):
+    denied = _require_roles(request, {"admin", "manager", "cashier"})
+    if denied:
+        return denied
     try:
         with transaction.atomic():
             sale = (
@@ -2620,6 +3200,9 @@ def stock_out_submit(request, sale_id: int):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def stock_out_cancel(request, sale_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         with transaction.atomic():
             sale = (
@@ -2651,9 +3234,1571 @@ def stock_out_cancel(request, sale_id: int):
     )
 
 
+def _serialize_stock_adjustment(adjustment: StockAdjustment, include_items=False):
+    payload = {
+        "id": adjustment.id,
+        "posting_number": adjustment.posting_number,
+        "reason": adjustment.reason,
+        "reason_label": adjustment.get_reason_display(),
+        "status": adjustment.get_status_display(),
+        "status_key": adjustment.status,
+        "created_by_id": adjustment.created_by_id,
+        "created_by": getattr(adjustment.created_by, "email", ""),
+        "notes": adjustment.notes,
+        "created_at": adjustment.created_at.isoformat(),
+        "updated_at": adjustment.updated_at.isoformat(),
+    }
+    if include_items:
+        payload["items"] = [
+            {
+                "id": item.id,
+                "medicine_id": item.medicine_id,
+                "medicine_name": item.medicine.name if item.medicine else "",
+                "batch_id": item.batch_id,
+                "batch_number": item.batch.batch_number if item.batch else "",
+                "quantity_change": item.quantity_change,
+                "unit_cost": str(item.unit_cost),
+                "notes": item.notes,
+            }
+            for item in adjustment.items.select_related("medicine", "batch").all()
+        ]
+    return payload
+
+
+def _normalize_stock_adjustment_payload(payload):
+    reason = (payload.get("reason") or StockAdjustment.REASON_COUNT).strip()
+    notes = (payload.get("notes") or "").strip()
+    items = payload.get("items") or []
+
+    valid_reasons = {choice[0] for choice in StockAdjustment.REASON_CHOICES}
+    if reason not in valid_reasons:
+        raise ValueError("Adjustment reason is invalid.")
+    if not isinstance(items, list) or not items:
+        raise ValueError("At least one adjustment item is required.")
+
+    normalized_items = []
+    for index, item in enumerate(items, start=1):
+        prefix = f"Item #{index}"
+        medicine_id = item.get("medicine_id")
+        batch_id = item.get("batch_id")
+        quantity_change = item.get("quantity_change")
+        unit_cost = item.get("unit_cost", "0")
+        line_notes = (item.get("notes") or "").strip()
+
+        if not medicine_id:
+            raise ValueError(f"{prefix}: medicine is required.")
+        if not batch_id:
+            raise ValueError(f"{prefix}: batch is required.")
+
+        try:
+            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
+        except Medicine.DoesNotExist as exc:
+            raise ValueError(f"{prefix}: medicine not found.") from exc
+        try:
+            batch = Batches.objects.get(pk=batch_id, product_id=medicine)
+        except Batches.DoesNotExist as exc:
+            raise ValueError(f"{prefix}: batch not found for this medicine.") from exc
+
+        try:
+            quantity_change = int(quantity_change)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{prefix}: quantity_change must be a valid integer.") from exc
+        if quantity_change == 0:
+            raise ValueError(f"{prefix}: quantity_change cannot be zero.")
+
+        try:
+            unit_cost = Decimal(str(unit_cost or "0"))
+        except (InvalidOperation, TypeError, ValueError) as exc:
+            raise ValueError(f"{prefix}: unit_cost must be a valid number.") from exc
+        if unit_cost < 0:
+            raise ValueError(f"{prefix}: unit_cost cannot be negative.")
+
+        normalized_items.append(
+            {
+                "medicine": medicine,
+                "batch": batch,
+                "quantity_change": quantity_change,
+                "unit_cost": unit_cost,
+                "notes": line_notes,
+            }
+        )
+
+    return {"reason": reason, "notes": notes, "items": normalized_items}
+
+
+def _post_stock_adjustment(adjustment: StockAdjustment):
+    if adjustment.status != StockAdjustment.STATUS_DRAFT:
+        raise ValueError("Only draft adjustments can be submitted.")
+
+    items = list(adjustment.items.select_related("medicine", "batch").all())
+    if not items:
+        raise ValueError("Draft adjustment does not contain any items.")
+
+    batch_ids = sorted({item.batch_id for item in items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more batches are no longer available.")
+
+    inventory_keys = sorted(
+        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in items}
+    )
+    locked_inventory = {}
+    for medicine_id, batch_number in inventory_keys:
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine_id=medicine_id, batch_number=batch_number)
+            .first()
+        )
+        if inventory_row:
+            locked_inventory[(medicine_id, batch_number)] = inventory_row
+
+    ledger_type = (
+        StockLedger.TRANSACTION_DAMAGE
+        if adjustment.reason == StockAdjustment.REASON_DAMAGE
+        else StockLedger.TRANSACTION_ADJUSTMENT
+    )
+
+    for item in items:
+        batch = locked_batches[item.batch_id]
+        inventory_row = locked_inventory.get((item.medicine_id, batch.batch_number))
+
+        next_batch_qty = batch.quantity + item.quantity_change
+        if next_batch_qty < 0:
+            raise ValueError(
+                f"Batch {batch.batch_number} does not have enough quantity for this adjustment."
+            )
+        batch.quantity = next_batch_qty
+        batch.save(update_fields=["quantity"])
+
+        if inventory_row:
+            next_inv_qty = inventory_row.quantity + item.quantity_change
+            if next_inv_qty < 0:
+                raise ValueError(
+                    f"Inventory batch {batch.batch_number} does not have enough quantity."
+                )
+            inventory_row.quantity = next_inv_qty
+            if inventory_row.quantity == 0:
+                inventory_row.delete()
+            else:
+                inventory_row.save(update_fields=["quantity", "updated_at"])
+        else:
+            if item.quantity_change < 0:
+                raise ValueError(
+                    f"Inventory record is missing for batch {batch.batch_number}."
+                )
+            Inventory.objects.create(
+                medicine=item.medicine,
+                batch_number=batch.batch_number,
+                quantity=item.quantity_change,
+                expiry_date=batch.expiry_date,
+                location="Main Store",
+            )
+
+        StockLedger.objects.create(
+            medicine=item.medicine,
+            batch=batch,
+            transaction_type=ledger_type,
+            quantity=item.quantity_change,
+            unit_price=item.unit_cost,
+            reference_document=adjustment.posting_number,
+            notes=item.notes or f"Stock adjustment {adjustment.posting_number}",
+        )
+
+    adjustment.status = StockAdjustment.STATUS_POSTED
+    adjustment.save(update_fields=["status", "updated_at"])
+
+
+def _reverse_posted_stock_adjustment(adjustment: StockAdjustment):
+    if adjustment.status != StockAdjustment.STATUS_POSTED:
+        raise ValueError("Only posted adjustments can be cancelled.")
+
+    items = list(adjustment.items.select_related("medicine", "batch").all())
+    if not items:
+        raise ValueError("Posted adjustment does not contain any items.")
+
+    batch_ids = sorted({item.batch_id for item in items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more batches are no longer available.")
+
+    inventory_keys = sorted(
+        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in items}
+    )
+    locked_inventory = {}
+    for medicine_id, batch_number in inventory_keys:
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine_id=medicine_id, batch_number=batch_number)
+            .first()
+        )
+        if inventory_row:
+            locked_inventory[(medicine_id, batch_number)] = inventory_row
+
+    ledger_type = (
+        StockLedger.TRANSACTION_DAMAGE
+        if adjustment.reason == StockAdjustment.REASON_DAMAGE
+        else StockLedger.TRANSACTION_ADJUSTMENT
+    )
+
+    for item in items:
+        batch = locked_batches[item.batch_id]
+        reverse_change = -item.quantity_change
+        next_batch_qty = batch.quantity + reverse_change
+        if next_batch_qty < 0:
+            raise ValueError(
+                f"Cannot cancel adjustment because batch {batch.batch_number} would go negative."
+            )
+        batch.quantity = next_batch_qty
+        batch.save(update_fields=["quantity"])
+
+        inventory_row = locked_inventory.get((item.medicine_id, batch.batch_number))
+        if inventory_row:
+            next_inv_qty = inventory_row.quantity + reverse_change
+            if next_inv_qty < 0:
+                raise ValueError(
+                    f"Cannot cancel adjustment because inventory batch {batch.batch_number} would go negative."
+                )
+            inventory_row.quantity = next_inv_qty
+            if inventory_row.quantity == 0:
+                inventory_row.delete()
+            else:
+                inventory_row.save(update_fields=["quantity", "updated_at"])
+        else:
+            if reverse_change < 0:
+                raise ValueError(
+                    f"Inventory record is missing for batch {batch.batch_number}."
+                )
+            Inventory.objects.create(
+                medicine=item.medicine,
+                batch_number=batch.batch_number,
+                quantity=reverse_change,
+                expiry_date=batch.expiry_date,
+                location="Main Store",
+            )
+
+        StockLedger.objects.create(
+            medicine=item.medicine,
+            batch=batch,
+            transaction_type=ledger_type,
+            quantity=reverse_change,
+            unit_price=item.unit_cost,
+            reference_document=adjustment.posting_number,
+            notes=f"Adjustment reversal {adjustment.posting_number}",
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stock_adjustments_list(request):
+    page_size = int(request.GET.get("page_size", 10))
+    page = int(request.GET.get("page", 1))
+    posting_number = _compact_text(request.GET.get("posting_number", ""))
+    status = _compact_text(request.GET.get("status", "")).lower()
+    reason = _compact_text(request.GET.get("reason", "")).lower()
+
+    queryset = StockAdjustment.objects.select_related("created_by").order_by("-created_at")
+    if posting_number:
+        queryset = queryset.filter(posting_number__icontains=posting_number)
+    if status:
+        queryset = queryset.filter(status=status)
+    if reason:
+        queryset = queryset.filter(reason=reason)
+
+    paginator = Paginator(queryset, page_size)
+    try:
+        page_obj = paginator.page(page)
+    except EmptyPage:
+        page_obj = paginator.page(1)
+
+    return JsonResponse(
+        {
+            "results": [_serialize_stock_adjustment(adj) for adj in page_obj.object_list],
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number,
+            "page_size": page_size,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stock_adjustment_detail(request, adjustment_id: int):
+    try:
+        adjustment = (
+            StockAdjustment.objects.select_related("created_by")
+            .prefetch_related("items__medicine", "items__batch")
+            .get(id=adjustment_id)
+        )
+    except StockAdjustment.DoesNotExist:
+        return JsonResponse({"error": "Stock adjustment not found."}, status=404)
+    return JsonResponse(_serialize_stock_adjustment(adjustment, include_items=True))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_adjustment_create(request):
+    try:
+        normalized = _normalize_stock_adjustment_payload(request.data)
+        with transaction.atomic():
+            adjustment = StockAdjustment.objects.create(
+                reason=normalized["reason"],
+                status=StockAdjustment.STATUS_DRAFT,
+                notes=normalized["notes"],
+                created_by=request.user,
+            )
+            for item in normalized["items"]:
+                StockAdjustmentItem.objects.create(
+                    stock_adjustment=adjustment,
+                    medicine=item["medicine"],
+                    batch=item["batch"],
+                    quantity_change=item["quantity_change"],
+                    unit_cost=item["unit_cost"],
+                    notes=item["notes"],
+                )
+            UserLog.objects.create(
+                user=request.user,
+                action="Stock Adjustment Draft Created",
+                details=json.dumps(
+                    {"stock_adjustment_id": adjustment.id, "posting_number": adjustment.posting_number},
+                    default=str,
+                ),
+            )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    adjustment = StockAdjustment.objects.select_related("created_by").get(id=adjustment.id)
+    return JsonResponse(
+        {"message": "Stock adjustment draft created.", "adjustment": _serialize_stock_adjustment(adjustment, include_items=True)},
+        status=201,
+    )
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def stock_adjustment_update(request, adjustment_id: int):
+    try:
+        adjustment = StockAdjustment.objects.get(id=adjustment_id)
+    except StockAdjustment.DoesNotExist:
+        return JsonResponse({"error": "Stock adjustment not found."}, status=404)
+
+    previous_status = adjustment.status
+    if previous_status not in (StockAdjustment.STATUS_DRAFT, StockAdjustment.STATUS_CANCELLED):
+        return JsonResponse(
+            {"error": "Only draft or cancelled stock adjustments can be edited."},
+            status=400,
+        )
+
+    try:
+        normalized = _normalize_stock_adjustment_payload(request.data)
+        with transaction.atomic():
+            adjustment.reason = normalized["reason"]
+            adjustment.notes = normalized["notes"]
+            if previous_status == StockAdjustment.STATUS_CANCELLED:
+                adjustment.status = StockAdjustment.STATUS_DRAFT
+            adjustment.save(update_fields=["reason", "notes", "status", "updated_at"])
+
+            adjustment.items.all().delete()
+            for item in normalized["items"]:
+                StockAdjustmentItem.objects.create(
+                    stock_adjustment=adjustment,
+                    medicine=item["medicine"],
+                    batch=item["batch"],
+                    quantity_change=item["quantity_change"],
+                    unit_cost=item["unit_cost"],
+                    notes=item["notes"],
+                )
+
+            UserLog.objects.create(
+                user=request.user,
+                action=(
+                    "Stock Adjustment Amended"
+                    if previous_status == StockAdjustment.STATUS_CANCELLED
+                    else "Stock Adjustment Draft Updated"
+                ),
+                details=json.dumps(
+                    {
+                        "stock_adjustment_id": adjustment.id,
+                        "posting_number": adjustment.posting_number,
+                        "previous_status": previous_status,
+                        "current_status": adjustment.status,
+                    },
+                    default=str,
+                ),
+            )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    adjustment = (
+        StockAdjustment.objects.select_related("created_by")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=adjustment.id)
+    )
+    return JsonResponse(
+        {
+            "message": (
+                "Stock adjustment amended and moved back to draft successfully."
+                if previous_status == StockAdjustment.STATUS_CANCELLED
+                else "Stock adjustment draft updated successfully."
+            ),
+            "adjustment": _serialize_stock_adjustment(adjustment, include_items=True),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_adjustment_submit(request, adjustment_id: int):
+    denied = _require_roles(request, {"admin", "manager", "pharmacist"})
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            adjustment = StockAdjustment.objects.select_for_update().get(id=adjustment_id)
+            _post_stock_adjustment(adjustment)
+            UserLog.objects.create(
+                user=request.user,
+                action="Stock Adjustment Submitted",
+                details=json.dumps(
+                    {"stock_adjustment_id": adjustment.id, "posting_number": adjustment.posting_number},
+                    default=str,
+                ),
+            )
+    except StockAdjustment.DoesNotExist:
+        return JsonResponse({"error": "Stock adjustment not found."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    adjustment = (
+        StockAdjustment.objects.select_related("created_by")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=adjustment_id)
+    )
+    return JsonResponse(
+        {"message": "Stock adjustment submitted successfully.", "adjustment": _serialize_stock_adjustment(adjustment, include_items=True)}
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_adjustment_cancel(request, adjustment_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            adjustment = StockAdjustment.objects.select_for_update().get(id=adjustment_id)
+            _reverse_posted_stock_adjustment(adjustment)
+            adjustment.status = StockAdjustment.STATUS_CANCELLED
+            adjustment.save(update_fields=["status", "updated_at"])
+            UserLog.objects.create(
+                user=request.user,
+                action="Stock Adjustment Cancelled",
+                details=json.dumps(
+                    {"stock_adjustment_id": adjustment.id, "posting_number": adjustment.posting_number},
+                    default=str,
+                ),
+            )
+    except StockAdjustment.DoesNotExist:
+        return JsonResponse({"error": "Stock adjustment not found."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    adjustment = (
+        StockAdjustment.objects.select_related("created_by")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=adjustment_id)
+    )
+    return JsonResponse(
+        {"message": "Stock adjustment cancelled successfully.", "adjustment": _serialize_stock_adjustment(adjustment, include_items=True)}
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stock_adjustment_logs(request, adjustment_id: int):
+    logs = _filter_logs_for_entity(
+        UserLog.objects.select_related("user").order_by("-timestamp"),
+        "stock_adjustment_id",
+        adjustment_id,
+    )
+    return JsonResponse([_serialize_user_log(log) for log in logs], safe=False)
+
+
+def _serialize_sales_return(doc: SalesReturn, include_items=False):
+    payload = {
+        "id": doc.id,
+        "posting_number": doc.posting_number,
+        "reference_invoice": doc.reference_invoice,
+        "customer_name": doc.customer_name,
+        "status": doc.get_status_display(),
+        "status_key": doc.status,
+        "created_by_id": doc.created_by_id,
+        "created_by": getattr(doc.created_by, "email", ""),
+        "notes": doc.notes,
+        "created_at": doc.created_at.isoformat(),
+        "updated_at": doc.updated_at.isoformat(),
+    }
+    if include_items:
+        payload["items"] = [
+            {
+                "id": item.id,
+                "medicine_id": item.medicine_id,
+                "medicine_name": item.medicine.name if item.medicine else "",
+                "batch_id": item.batch_id,
+                "batch_number": item.batch.batch_number if item.batch else "",
+                "quantity": item.quantity,
+                "unit_price": str(item.unit_price),
+                "notes": item.notes,
+            }
+            for item in doc.items.select_related("medicine", "batch").all()
+        ]
+    return payload
+
+
+def _normalize_sales_return_payload(payload):
+    reference_invoice = (payload.get("reference_invoice") or "").strip()
+    customer_name = (payload.get("customer_name") or "").strip()
+    notes = (payload.get("notes") or "").strip()
+    items = payload.get("items") or []
+
+    if not isinstance(items, list) or not items:
+        raise ValueError("At least one sales return item is required.")
+
+    today = timezone.localdate()
+    normalized_items = []
+    for index, item in enumerate(items, start=1):
+        prefix = f"Item #{index}"
+        medicine_id = item.get("medicine_id")
+        batch_id = item.get("batch_id")
+        if not medicine_id:
+            raise ValueError(f"{prefix}: medicine is required.")
+        if not batch_id:
+            raise ValueError(f"{prefix}: batch is required.")
+
+        try:
+            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
+        except Medicine.DoesNotExist as exc:
+            raise ValueError(f"{prefix}: medicine not found.") from exc
+        try:
+            batch = Batches.objects.get(pk=batch_id, product_id=medicine)
+        except Batches.DoesNotExist as exc:
+            raise ValueError(f"{prefix}: batch not found for this medicine.") from exc
+        if batch.expiry_date <= today:
+            raise ValueError(f"{prefix}: cannot restock an expired batch.")
+
+        quantity = _parse_positive_int(item.get("quantity"), f"{prefix} quantity")
+        unit_price = _parse_decimal(item.get("unit_price") or medicine.selling_price, f"{prefix} unit price")
+        normalized_items.append(
+            {"medicine": medicine, "batch": batch, "quantity": quantity, "unit_price": unit_price, "notes": (item.get("notes") or "").strip()}
+        )
+
+    return {
+        "reference_invoice": reference_invoice,
+        "customer_name": customer_name,
+        "notes": notes,
+        "items": normalized_items,
+    }
+
+
+def _post_sales_return(doc: SalesReturn):
+    if doc.status != SalesReturn.STATUS_DRAFT:
+        raise ValueError("Only draft sales returns can be submitted.")
+    items = list(doc.items.select_related("medicine", "batch").all())
+    if not items:
+        raise ValueError("Draft sales return does not contain any items.")
+
+    batch_ids = sorted({item.batch_id for item in items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more batches are no longer available.")
+
+    inventory_keys = sorted(
+        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in items}
+    )
+    locked_inventory = {}
+    for medicine_id, batch_number in inventory_keys:
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine_id=medicine_id, batch_number=batch_number)
+            .first()
+        )
+        if inventory_row:
+            locked_inventory[(medicine_id, batch_number)] = inventory_row
+
+    for item in items:
+        batch = locked_batches[item.batch_id]
+        batch.quantity += item.quantity
+        batch.save(update_fields=["quantity"])
+
+        inventory_row = locked_inventory.get((item.medicine_id, batch.batch_number))
+        if not inventory_row:
+            inventory_row = Inventory.objects.create(
+                medicine=item.medicine,
+                batch_number=batch.batch_number,
+                quantity=item.quantity,
+                expiry_date=batch.expiry_date,
+                location="Main Store",
+            )
+        else:
+            inventory_row.quantity += item.quantity
+            inventory_row.expiry_date = batch.expiry_date
+            inventory_row.save(update_fields=["quantity", "expiry_date", "updated_at"])
+
+        StockLedger.objects.create(
+            medicine=item.medicine,
+            batch=batch,
+            transaction_type=StockLedger.TRANSACTION_RETURN,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            reference_document=doc.reference_invoice or doc.posting_number,
+            notes=item.notes or f"Customer return {doc.posting_number}",
+        )
+
+    doc.status = SalesReturn.STATUS_POSTED
+    doc.save(update_fields=["status", "updated_at"])
+
+
+def _reverse_posted_sales_return(doc: SalesReturn):
+    if doc.status != SalesReturn.STATUS_POSTED:
+        raise ValueError("Only posted sales returns can be cancelled.")
+    items = list(doc.items.select_related("medicine", "batch").all())
+    if not items:
+        raise ValueError("Posted sales return does not contain any items.")
+
+    batch_ids = sorted({item.batch_id for item in items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more batches are no longer available.")
+
+    for item in items:
+        batch = locked_batches[item.batch_id]
+        if batch.quantity < item.quantity:
+            raise ValueError(
+                f"Cannot cancel sales return because batch {batch.batch_number} does not have enough quantity."
+            )
+        batch.quantity -= item.quantity
+        batch.save(update_fields=["quantity"])
+
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine=item.medicine, batch_number=batch.batch_number)
+            .first()
+        )
+        if not inventory_row or inventory_row.quantity < item.quantity:
+            raise ValueError(
+                f"Cannot cancel sales return because inventory batch {batch.batch_number} is below the return quantity."
+            )
+        inventory_row.quantity -= item.quantity
+        if inventory_row.quantity == 0:
+            inventory_row.delete()
+        else:
+            inventory_row.save(update_fields=["quantity", "updated_at"])
+
+        StockLedger.objects.create(
+            medicine=item.medicine,
+            batch=batch,
+            transaction_type=StockLedger.TRANSACTION_RETURN,
+            quantity=-item.quantity,
+            unit_price=item.unit_price,
+            reference_document=doc.reference_invoice or doc.posting_number,
+            notes=f"Customer return reversal {doc.posting_number}",
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sales_returns_list(request):
+    page_size = int(request.GET.get("page_size", 10))
+    page = int(request.GET.get("page", 1))
+    posting_number = _compact_text(request.GET.get("posting_number", ""))
+    reference_invoice = _compact_text(request.GET.get("reference_invoice", ""))
+    status = _compact_text(request.GET.get("status", "")).lower()
+
+    queryset = SalesReturn.objects.select_related("created_by").order_by("-created_at")
+    if posting_number:
+        queryset = queryset.filter(posting_number__icontains=posting_number)
+    if reference_invoice:
+        queryset = queryset.filter(reference_invoice__icontains=reference_invoice)
+    if status:
+        queryset = queryset.filter(status=status)
+
+    paginator = Paginator(queryset, page_size)
+    try:
+        page_obj = paginator.page(page)
+    except EmptyPage:
+        page_obj = paginator.page(1)
+
+    return JsonResponse(
+        {
+            "results": [_serialize_sales_return(doc) for doc in page_obj.object_list],
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number,
+            "page_size": page_size,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sales_return_detail(request, return_id: int):
+    try:
+        doc = (
+            SalesReturn.objects.select_related("created_by")
+            .prefetch_related("items__medicine", "items__batch")
+            .get(id=return_id)
+        )
+    except SalesReturn.DoesNotExist:
+        return JsonResponse({"error": "Sales return not found."}, status=404)
+    return JsonResponse(_serialize_sales_return(doc, include_items=True))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sales_return_create(request):
+    try:
+        normalized = _normalize_sales_return_payload(request.data)
+        with transaction.atomic():
+            doc = SalesReturn.objects.create(
+                reference_invoice=normalized["reference_invoice"],
+                customer_name=normalized["customer_name"],
+                status=SalesReturn.STATUS_DRAFT,
+                notes=normalized["notes"],
+                created_by=request.user,
+            )
+            for item in normalized["items"]:
+                SalesReturnItem.objects.create(
+                    sales_return=doc,
+                    medicine=item["medicine"],
+                    batch=item["batch"],
+                    quantity=item["quantity"],
+                    unit_price=item["unit_price"],
+                    notes=item["notes"],
+                )
+            UserLog.objects.create(
+                user=request.user,
+                action="Sales Return Draft Created",
+                details=json.dumps(
+                    {"sales_return_id": doc.id, "posting_number": doc.posting_number},
+                    default=str,
+                ),
+            )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = SalesReturn.objects.select_related("created_by").get(id=doc.id)
+    return JsonResponse(
+        {"message": "Sales return draft created.", "sales_return": _serialize_sales_return(doc, include_items=True)},
+        status=201,
+    )
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def sales_return_update(request, return_id: int):
+    try:
+        doc = SalesReturn.objects.get(id=return_id)
+    except SalesReturn.DoesNotExist:
+        return JsonResponse({"error": "Sales return not found."}, status=404)
+
+    previous_status = doc.status
+    if previous_status not in (SalesReturn.STATUS_DRAFT, SalesReturn.STATUS_CANCELLED):
+        return JsonResponse(
+            {"error": "Only draft or cancelled sales returns can be edited."},
+            status=400,
+        )
+
+    try:
+        normalized = _normalize_sales_return_payload(request.data)
+        with transaction.atomic():
+            doc.reference_invoice = normalized["reference_invoice"]
+            doc.customer_name = normalized["customer_name"]
+            doc.notes = normalized["notes"]
+            if previous_status == SalesReturn.STATUS_CANCELLED:
+                doc.status = SalesReturn.STATUS_DRAFT
+            doc.save(update_fields=["reference_invoice", "customer_name", "notes", "status", "updated_at"])
+
+            doc.items.all().delete()
+            for item in normalized["items"]:
+                SalesReturnItem.objects.create(
+                    sales_return=doc,
+                    medicine=item["medicine"],
+                    batch=item["batch"],
+                    quantity=item["quantity"],
+                    unit_price=item["unit_price"],
+                    notes=item["notes"],
+                )
+
+            UserLog.objects.create(
+                user=request.user,
+                action=(
+                    "Sales Return Amended"
+                    if previous_status == SalesReturn.STATUS_CANCELLED
+                    else "Sales Return Draft Updated"
+                ),
+                details=json.dumps(
+                    {
+                        "sales_return_id": doc.id,
+                        "posting_number": doc.posting_number,
+                        "previous_status": previous_status,
+                        "current_status": doc.status,
+                    },
+                    default=str,
+                ),
+            )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = (
+        SalesReturn.objects.select_related("created_by")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=doc.id)
+    )
+    return JsonResponse(
+        {
+            "message": (
+                "Sales return amended and moved back to draft successfully."
+                if previous_status == SalesReturn.STATUS_CANCELLED
+                else "Sales return draft updated successfully."
+            ),
+            "sales_return": _serialize_sales_return(doc, include_items=True),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sales_return_submit(request, return_id: int):
+    denied = _require_roles(request, {"admin", "manager", "pharmacist"})
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            doc = SalesReturn.objects.select_for_update().get(id=return_id)
+            _post_sales_return(doc)
+            UserLog.objects.create(
+                user=request.user,
+                action="Sales Return Submitted",
+                details=json.dumps(
+                    {"sales_return_id": doc.id, "posting_number": doc.posting_number},
+                    default=str,
+                ),
+            )
+    except SalesReturn.DoesNotExist:
+        return JsonResponse({"error": "Sales return not found."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = (
+        SalesReturn.objects.select_related("created_by")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=return_id)
+    )
+    return JsonResponse(
+        {"message": "Sales return submitted successfully.", "sales_return": _serialize_sales_return(doc, include_items=True)}
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def sales_return_cancel(request, return_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            doc = SalesReturn.objects.select_for_update().get(id=return_id)
+            _reverse_posted_sales_return(doc)
+            doc.status = SalesReturn.STATUS_CANCELLED
+            doc.save(update_fields=["status", "updated_at"])
+            UserLog.objects.create(
+                user=request.user,
+                action="Sales Return Cancelled",
+                details=json.dumps(
+                    {"sales_return_id": doc.id, "posting_number": doc.posting_number},
+                    default=str,
+                ),
+            )
+    except SalesReturn.DoesNotExist:
+        return JsonResponse({"error": "Sales return not found."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = (
+        SalesReturn.objects.select_related("created_by")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=return_id)
+    )
+    return JsonResponse(
+        {"message": "Sales return cancelled successfully.", "sales_return": _serialize_sales_return(doc, include_items=True)}
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def sales_return_logs(request, return_id: int):
+    logs = _filter_logs_for_entity(
+        UserLog.objects.select_related("user").order_by("-timestamp"),
+        "sales_return_id",
+        return_id,
+    )
+    return JsonResponse([_serialize_user_log(log) for log in logs], safe=False)
+
+
+def _serialize_supplier_return(doc: SupplierReturn, include_items=False):
+    payload = {
+        "id": doc.id,
+        "posting_number": doc.posting_number,
+        "supplier_id": doc.supplier_id,
+        "supplier": doc.supplier.name if doc.supplier else "",
+        "reference_document": doc.reference_document,
+        "status": doc.get_status_display(),
+        "status_key": doc.status,
+        "created_by_id": doc.created_by_id,
+        "created_by": getattr(doc.created_by, "email", ""),
+        "notes": doc.notes,
+        "created_at": doc.created_at.isoformat(),
+        "updated_at": doc.updated_at.isoformat(),
+    }
+    if include_items:
+        payload["items"] = [
+            {
+                "id": item.id,
+                "medicine_id": item.medicine_id,
+                "medicine_name": item.medicine.name if item.medicine else "",
+                "batch_id": item.batch_id,
+                "batch_number": item.batch.batch_number if item.batch else "",
+                "quantity": item.quantity,
+                "unit_price": str(item.unit_price),
+                "notes": item.notes,
+            }
+            for item in doc.items.select_related("medicine", "batch").all()
+        ]
+    return payload
+
+
+def _normalize_supplier_return_payload(payload):
+    supplier_id = payload.get("supplier_id")
+    reference_document = (payload.get("reference_document") or "").strip()
+    notes = (payload.get("notes") or "").strip()
+    items = payload.get("items") or []
+
+    if not supplier_id:
+        raise ValueError("Supplier is required.")
+    try:
+        supplier = Supplier.objects.get(pk=supplier_id)
+    except Supplier.DoesNotExist as exc:
+        raise ValueError("Supplier not found.") from exc
+
+    if not isinstance(items, list) or not items:
+        raise ValueError("At least one supplier return item is required.")
+
+    normalized_items = []
+    for index, item in enumerate(items, start=1):
+        prefix = f"Item #{index}"
+        medicine_id = item.get("medicine_id")
+        batch_id = item.get("batch_id")
+        if not medicine_id:
+            raise ValueError(f"{prefix}: medicine is required.")
+        if not batch_id:
+            raise ValueError(f"{prefix}: batch is required.")
+
+        try:
+            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
+        except Medicine.DoesNotExist as exc:
+            raise ValueError(f"{prefix}: medicine not found.") from exc
+        try:
+            batch = Batches.objects.get(pk=batch_id, product_id=medicine)
+        except Batches.DoesNotExist as exc:
+            raise ValueError(f"{prefix}: batch not found for this medicine.") from exc
+
+        quantity = _parse_positive_int(item.get("quantity"), f"{prefix} quantity")
+        unit_price = _parse_decimal(item.get("unit_price") or batch.purchase_price, f"{prefix} unit price")
+        normalized_items.append(
+            {"medicine": medicine, "batch": batch, "quantity": quantity, "unit_price": unit_price, "notes": (item.get("notes") or "").strip()}
+        )
+
+    return {
+        "supplier": supplier,
+        "reference_document": reference_document,
+        "notes": notes,
+        "items": normalized_items,
+    }
+
+
+def _post_supplier_return(doc: SupplierReturn):
+    if doc.status != SupplierReturn.STATUS_DRAFT:
+        raise ValueError("Only draft supplier returns can be submitted.")
+    items = list(doc.items.select_related("medicine", "batch").all())
+    if not items:
+        raise ValueError("Draft supplier return does not contain any items.")
+
+    batch_ids = sorted({item.batch_id for item in items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more batches are no longer available.")
+
+    for item in items:
+        batch = locked_batches[item.batch_id]
+        if batch.quantity < item.quantity:
+            raise ValueError(
+                f"Batch {batch.batch_number} does not have enough quantity for this supplier return."
+            )
+        batch.quantity -= item.quantity
+        batch.save(update_fields=["quantity"])
+
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine=item.medicine, batch_number=batch.batch_number)
+            .first()
+        )
+        if not inventory_row or inventory_row.quantity < item.quantity:
+            raise ValueError(
+                f"Inventory batch {batch.batch_number} does not have enough quantity."
+            )
+        inventory_row.quantity -= item.quantity
+        if inventory_row.quantity == 0:
+            inventory_row.delete()
+        else:
+            inventory_row.save(update_fields=["quantity", "updated_at"])
+
+        StockLedger.objects.create(
+            medicine=item.medicine,
+            batch=batch,
+            transaction_type=StockLedger.TRANSACTION_RETURN,
+            quantity=-item.quantity,
+            unit_price=item.unit_price,
+            reference_document=doc.reference_document or doc.posting_number,
+            notes=item.notes or f"Supplier return {doc.posting_number}",
+        )
+
+    doc.status = SupplierReturn.STATUS_POSTED
+    doc.save(update_fields=["status", "updated_at"])
+
+
+def _reverse_posted_supplier_return(doc: SupplierReturn):
+    if doc.status != SupplierReturn.STATUS_POSTED:
+        raise ValueError("Only posted supplier returns can be cancelled.")
+    items = list(doc.items.select_related("medicine", "batch").all())
+    if not items:
+        raise ValueError("Posted supplier return does not contain any items.")
+
+    batch_ids = sorted({item.batch_id for item in items if item.batch_id})
+    locked_batches = {
+        batch.batch_id: batch
+        for batch in Batches.objects.select_for_update().filter(pk__in=batch_ids)
+    }
+    if len(locked_batches) != len(batch_ids):
+        raise ValueError("One or more batches are no longer available.")
+
+    for item in items:
+        batch = locked_batches[item.batch_id]
+        batch.quantity += item.quantity
+        batch.save(update_fields=["quantity"])
+
+        inventory_row = (
+            Inventory.objects.select_for_update()
+            .filter(medicine=item.medicine, batch_number=batch.batch_number)
+            .first()
+        )
+        if not inventory_row:
+            Inventory.objects.create(
+                medicine=item.medicine,
+                batch_number=batch.batch_number,
+                quantity=item.quantity,
+                expiry_date=batch.expiry_date,
+                location="Main Store",
+            )
+        else:
+            inventory_row.quantity += item.quantity
+            inventory_row.expiry_date = batch.expiry_date
+            inventory_row.save(update_fields=["quantity", "expiry_date", "updated_at"])
+
+        StockLedger.objects.create(
+            medicine=item.medicine,
+            batch=batch,
+            transaction_type=StockLedger.TRANSACTION_RETURN,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            reference_document=doc.reference_document or doc.posting_number,
+            notes=f"Supplier return reversal {doc.posting_number}",
+        )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def supplier_returns_list(request):
+    page_size = int(request.GET.get("page_size", 10))
+    page = int(request.GET.get("page", 1))
+    posting_number = _compact_text(request.GET.get("posting_number", ""))
+    supplier_query = _compact_text(request.GET.get("supplier", ""))
+    status = _compact_text(request.GET.get("status", "")).lower()
+
+    queryset = SupplierReturn.objects.select_related("created_by", "supplier").order_by(
+        "-created_at"
+    )
+    if posting_number:
+        queryset = queryset.filter(posting_number__icontains=posting_number)
+    if supplier_query:
+        queryset = queryset.filter(supplier__name__icontains=supplier_query)
+    if status:
+        queryset = queryset.filter(status=status)
+
+    paginator = Paginator(queryset, page_size)
+    try:
+        page_obj = paginator.page(page)
+    except EmptyPage:
+        page_obj = paginator.page(1)
+
+    return JsonResponse(
+        {
+            "results": [_serialize_supplier_return(doc) for doc in page_obj.object_list],
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number,
+            "page_size": page_size,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def supplier_return_detail(request, return_id: int):
+    try:
+        doc = (
+            SupplierReturn.objects.select_related("created_by", "supplier")
+            .prefetch_related("items__medicine", "items__batch")
+            .get(id=return_id)
+        )
+    except SupplierReturn.DoesNotExist:
+        return JsonResponse({"error": "Supplier return not found."}, status=404)
+    return JsonResponse(_serialize_supplier_return(doc, include_items=True))
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def supplier_return_create(request):
+    try:
+        normalized = _normalize_supplier_return_payload(request.data)
+        with transaction.atomic():
+            doc = SupplierReturn.objects.create(
+                supplier=normalized["supplier"],
+                reference_document=normalized["reference_document"],
+                status=SupplierReturn.STATUS_DRAFT,
+                notes=normalized["notes"],
+                created_by=request.user,
+            )
+            for item in normalized["items"]:
+                SupplierReturnItem.objects.create(
+                    supplier_return=doc,
+                    medicine=item["medicine"],
+                    batch=item["batch"],
+                    quantity=item["quantity"],
+                    unit_price=item["unit_price"],
+                    notes=item["notes"],
+                )
+            UserLog.objects.create(
+                user=request.user,
+                action="Supplier Return Draft Created",
+                details=json.dumps(
+                    {"supplier_return_id": doc.id, "posting_number": doc.posting_number},
+                    default=str,
+                ),
+            )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = SupplierReturn.objects.select_related("created_by", "supplier").get(id=doc.id)
+    return JsonResponse(
+        {"message": "Supplier return draft created.", "supplier_return": _serialize_supplier_return(doc, include_items=True)},
+        status=201,
+    )
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def supplier_return_update(request, return_id: int):
+    try:
+        doc = SupplierReturn.objects.get(id=return_id)
+    except SupplierReturn.DoesNotExist:
+        return JsonResponse({"error": "Supplier return not found."}, status=404)
+
+    previous_status = doc.status
+    if previous_status not in (SupplierReturn.STATUS_DRAFT, SupplierReturn.STATUS_CANCELLED):
+        return JsonResponse(
+            {"error": "Only draft or cancelled supplier returns can be edited."},
+            status=400,
+        )
+
+    try:
+        normalized = _normalize_supplier_return_payload(request.data)
+        with transaction.atomic():
+            doc.supplier = normalized["supplier"]
+            doc.reference_document = normalized["reference_document"]
+            doc.notes = normalized["notes"]
+            if previous_status == SupplierReturn.STATUS_CANCELLED:
+                doc.status = SupplierReturn.STATUS_DRAFT
+            doc.save(update_fields=["supplier", "reference_document", "notes", "status", "updated_at"])
+
+            doc.items.all().delete()
+            for item in normalized["items"]:
+                SupplierReturnItem.objects.create(
+                    supplier_return=doc,
+                    medicine=item["medicine"],
+                    batch=item["batch"],
+                    quantity=item["quantity"],
+                    unit_price=item["unit_price"],
+                    notes=item["notes"],
+                )
+
+            UserLog.objects.create(
+                user=request.user,
+                action=(
+                    "Supplier Return Amended"
+                    if previous_status == SupplierReturn.STATUS_CANCELLED
+                    else "Supplier Return Draft Updated"
+                ),
+                details=json.dumps(
+                    {
+                        "supplier_return_id": doc.id,
+                        "posting_number": doc.posting_number,
+                        "previous_status": previous_status,
+                        "current_status": doc.status,
+                    },
+                    default=str,
+                ),
+            )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = (
+        SupplierReturn.objects.select_related("created_by", "supplier")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=doc.id)
+    )
+    return JsonResponse(
+        {
+            "message": (
+                "Supplier return amended and moved back to draft successfully."
+                if previous_status == SupplierReturn.STATUS_CANCELLED
+                else "Supplier return draft updated successfully."
+            ),
+            "supplier_return": _serialize_supplier_return(doc, include_items=True),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def supplier_return_submit(request, return_id: int):
+    denied = _require_roles(request, {"admin", "manager", "pharmacist"})
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            doc = SupplierReturn.objects.select_for_update().get(id=return_id)
+            _post_supplier_return(doc)
+            UserLog.objects.create(
+                user=request.user,
+                action="Supplier Return Submitted",
+                details=json.dumps(
+                    {"supplier_return_id": doc.id, "posting_number": doc.posting_number},
+                    default=str,
+                ),
+            )
+    except SupplierReturn.DoesNotExist:
+        return JsonResponse({"error": "Supplier return not found."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = (
+        SupplierReturn.objects.select_related("created_by", "supplier")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=return_id)
+    )
+    return JsonResponse(
+        {"message": "Supplier return submitted successfully.", "supplier_return": _serialize_supplier_return(doc, include_items=True)}
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def supplier_return_cancel(request, return_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+    try:
+        with transaction.atomic():
+            doc = SupplierReturn.objects.select_for_update().get(id=return_id)
+            _reverse_posted_supplier_return(doc)
+            doc.status = SupplierReturn.STATUS_CANCELLED
+            doc.save(update_fields=["status", "updated_at"])
+            UserLog.objects.create(
+                user=request.user,
+                action="Supplier Return Cancelled",
+                details=json.dumps(
+                    {"supplier_return_id": doc.id, "posting_number": doc.posting_number},
+                    default=str,
+                ),
+            )
+    except SupplierReturn.DoesNotExist:
+        return JsonResponse({"error": "Supplier return not found."}, status=404)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    doc = (
+        SupplierReturn.objects.select_related("created_by", "supplier")
+        .prefetch_related("items__medicine", "items__batch")
+        .get(id=return_id)
+    )
+    return JsonResponse(
+        {"message": "Supplier return cancelled successfully.", "supplier_return": _serialize_supplier_return(doc, include_items=True)}
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def supplier_return_logs(request, return_id: int):
+    logs = _filter_logs_for_entity(
+        UserLog.objects.select_related("user").order_by("-timestamp"),
+        "supplier_return_id",
+        return_id,
+    )
+    return JsonResponse([_serialize_user_log(log) for log in logs], safe=False)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def audit_logs_list(request):
+    try:
+        page_size = int(request.GET.get("page_size", 20))
+        page = int(request.GET.get("page", 1))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Invalid pagination values."}, status=400)
+
+    page_size = max(1, min(page_size, 100))
+    page = max(1, page)
+
+    q = _compact_text(request.GET.get("q", ""))
+    action = _compact_text(request.GET.get("action", ""))
+    user = _compact_text(request.GET.get("user", ""))
+
+    queryset = UserLog.objects.select_related("user").order_by("-timestamp")
+    if action:
+        queryset = queryset.filter(action__icontains=action)
+    if user:
+        queryset = queryset.filter(
+            Q(user__email__icontains=user)
+            | Q(user__first_name__icontains=user)
+            | Q(user__last_name__icontains=user)
+        )
+    if q:
+        queryset = queryset.filter(Q(action__icontains=q) | Q(details__icontains=q))
+
+    paginator = Paginator(queryset, page_size)
+    try:
+        page_obj = paginator.page(page)
+    except EmptyPage:
+        page_obj = paginator.page(1)
+
+    return JsonResponse(
+        {
+            "results": [_serialize_user_log(log) for log in page_obj.object_list],
+            "count": paginator.count,
+            "total_pages": paginator.num_pages,
+            "current_page": page_obj.number,
+            "page_size": page_size,
+            "has_next": page_obj.has_next(),
+            "has_previous": page_obj.has_previous(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_near_expiry(request):
+    days = _get_inventory_threshold(request, "days", 30, minimum=1, maximum=3650)
+    today = timezone.localdate()
+    cutoff = today + timedelta(days=days)
+
+    batches = (
+        Batches.objects.select_related("product_id__category", "supplier_id")
+        .filter(quantity__gt=0, expiry_date__gt=today, expiry_date__lte=cutoff)
+        .order_by("expiry_date", "product_id__name", "batch_number")
+    )
+
+    results = []
+    for batch in batches[:1000]:
+        medicine = batch.product_id
+        results.append(
+            {
+                "batch_id": batch.batch_id,
+                "batch_number": batch.batch_number,
+                "medicine_id": medicine.id if medicine else None,
+                "medicine_name": medicine.name if medicine else "",
+                "category": medicine.category.name if medicine and medicine.category else "",
+                "supplier": batch.supplier_id.name if batch.supplier_id else "",
+                "quantity": batch.quantity,
+                "expiry_date": batch.expiry_date.isoformat(),
+                "days_to_expiry": (batch.expiry_date - today).days,
+                "unit_cost": str(batch.purchase_price),
+            }
+        )
+
+    return JsonResponse({"days": days, "count": len(results), "results": results})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_stock_valuation(request):
+    batches = (
+        Batches.objects.select_related("product_id__category")
+        .filter(quantity__gt=0)
+        .order_by("product_id__name")
+    )
+
+    totals = {}
+    for batch in batches:
+        medicine = batch.product_id
+        if not medicine:
+            continue
+        entry = totals.setdefault(
+            medicine.id,
+            {
+                "medicine_id": medicine.id,
+                "medicine_name": medicine.name,
+                "category": medicine.category.name if medicine.category else "",
+                "quantity": 0,
+                "value": Decimal("0"),
+            },
+        )
+        entry["quantity"] += batch.quantity
+        entry["value"] += (batch.purchase_price or Decimal("0")) * batch.quantity
+
+    results = [
+        {**entry, "value": str(entry["value"])}
+        for entry in sorted(totals.values(), key=lambda item: item["medicine_name"].lower())
+    ]
+
+    total_value = sum(Decimal(item["value"]) for item in results) if results else Decimal("0")
+    return JsonResponse(
+        {
+            "count": len(results),
+            "total_value": str(total_value),
+            "results": results,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_sales_summary(request):
+    try:
+        start_date = (
+            _parse_date_value(request.GET.get("start_date"), "start_date")
+            if request.GET.get("start_date")
+            else None
+        )
+        end_date = (
+            _parse_date_value(request.GET.get("end_date"), "end_date")
+            if request.GET.get("end_date")
+            else None
+        )
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    sales_qs = Sale.objects.filter(status=Sale.STATUS_POSTED)
+    if start_date:
+        sales_qs = sales_qs.filter(created_at__date__gte=start_date)
+    if end_date:
+        sales_qs = sales_qs.filter(created_at__date__lte=end_date)
+
+    totals = sales_qs.aggregate(
+        total_sales=Coalesce(Sum("total_amount"), Value(0)),
+        sale_count=Count("id"),
+    )
+
+    item_qs = SaleItem.objects.select_related("medicine").filter(sale__in=sales_qs)
+    top_items = (
+        item_qs.values("medicine_id", "medicine__name")
+        .annotate(
+            quantity=Coalesce(Sum("quantity"), Value(0)),
+            revenue=Coalesce(Sum("subtotal"), Value(0)),
+        )
+        .order_by("-revenue")[:10]
+    )
+
+    return JsonResponse(
+        {
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+            "total_sales": str(totals["total_sales"]),
+            "sale_count": totals["sale_count"],
+            "top_items": [
+                {
+                    "medicine_id": row["medicine_id"],
+                    "medicine_name": row["medicine__name"] or "",
+                    "quantity": row["quantity"],
+                    "revenue": str(row["revenue"]),
+                }
+                for row in top_items
+            ],
+        }
+    )
+
+
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
 def medicines_delete(request, medicine_id):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
     try:
         medicine = Medicine.objects.get(id=medicine_id)
     except Medicine.DoesNotExist:

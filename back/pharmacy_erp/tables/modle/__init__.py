@@ -15,3 +15,9 @@ from .user_log import UserLog
 from .inventory_transactions import StockLedger
 from .stock_entry import StockEntry
 from .stock_entry_item import StockEntryItem
+from .stock_adjustment import StockAdjustment
+from .stock_adjustment_item import StockAdjustmentItem
+from .sales_return import SalesReturn
+from .sales_return_item import SalesReturnItem
+from .supplier_return import SupplierReturn
+from .supplier_return_item import SupplierReturnItem

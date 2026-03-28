@@ -50,6 +50,7 @@ interface SectionProps {
   accentColor: string;
   icon: React.ReactNode;
   links: LinkItem[];
+  actionButton?: React.ReactNode;
 }
 
 const CategorySection: React.FC<SectionProps> = ({
@@ -58,28 +59,32 @@ const CategorySection: React.FC<SectionProps> = ({
   accentColor,
   icon,
   links,
+  actionButton,
 }) => {
   const navigate = useNavigate();
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
-        <div className="flex items-center space-x-2.5">
-          <div
-            className={`p-1.5 rounded-lg ${accentColor} text-white shadow-sm`}
-          >
-            {React.cloneElement(icon as React.ReactElement, {
-              className: "w-4 h-4",
-            })}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-2.5 min-w-0">
+            <div
+              className={`p-1.5 rounded-lg ${accentColor} text-white shadow-sm shrink-0`}
+            >
+              {React.cloneElement(icon as React.ReactElement, {
+                className: "w-4 h-4",
+              })}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight leading-none mb-0.5">
+                {title}
+              </h2>
+              <p className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">
+                {subtitle}
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight leading-none mb-0.5">
-              {title}
-            </h2>
-            <p className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none">
-              {subtitle}
-            </p>
-          </div>
+          {actionButton && <div className="shrink-0">{actionButton}</div>}
         </div>
       </div>
 
@@ -139,6 +144,7 @@ const CategorySection: React.FC<SectionProps> = ({
 };
 
 const InventoryHub: React.FC = () => {
+  const navigate = useNavigate();
   const sections: SectionProps[] = [
     {
       title: "Items & Pricing",
@@ -167,8 +173,8 @@ const InventoryHub: React.FC = () => {
         },
         { label: "Medicine", path: "/inventory/medicines", highlighted: true },
         {
-          label: "Medicine Grouping",
-          path: "/inventory/medicine-grouping",
+          label: "Categories",
+          path: "/inventory/categories",
           highlighted: true,
         },
         { label: "Supplier", path: "/inventory/suppliers", highlighted: true },
@@ -208,20 +214,57 @@ const InventoryHub: React.FC = () => {
           highlighted: true,
           active: true,
         },
+        { label: "Purchases", path: "/inventory/purchases", highlighted: true },
         {
-          label: "Sales",
-          path: "/inventory/sales",
+          label: "Stock Out",
+          path: "/inventory/stock-outs",
           highlighted: true,
           active: true,
         },
+        {
+          label: "Stock Adjustments",
+          path: "/inventory/stock-adjustments",
+          highlighted: true,
+        },
+        {
+          label: "Customer Returns",
+          path: "/inventory/sales-returns",
+          highlighted: true,
+        },
+        {
+          label: "Supplier Returns",
+          path: "/inventory/supplier-returns",
+          highlighted: true,
+        },
         { label: "Delivery Notes", path: "#", highlighted: true },
-        { label: "Goods Receiving Voucher", path: "#", active: true },
+        { label: "Goods Receiving Voucher", path: "/inventory/grn", active: true },
         { label: "Pick & Pack List", path: "#", highlighted: true },
         { label: "Delivery Trip Planner", path: "#" },
         { label: "Internal Requisitions", path: "#" },
         { label: "Purchase Request", path: "#" },
         { label: "Temporary Movement", path: "#" },
       ],
+      actionButton: (
+        <button
+          onClick={() => navigate("/inventory/stock-outs/new-stock-out")}
+          className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-white shadow-sm transition-all hover:bg-emerald-600 active:scale-95"
+        >
+          <svg
+            className="w-2.5 h-2.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
+              d="M12 4v16m8-8H4"
+            />
+          </svg>
+          New Sale
+        </button>
+      ),
     },
     {
       title: "Stock Reports",
@@ -243,7 +286,10 @@ const InventoryHub: React.FC = () => {
         </svg>
       ),
       links: [
-        { label: "Stock Ledger", path: "#", highlighted: true },
+        { label: "Stock Ledger", path: "/inventory/stock-ledger", highlighted: true },
+        { label: "Sales Summary", path: "/inventory/reports/sales-summary", highlighted: true },
+        { label: "Near-Expiry Report", path: "/inventory/reports/near-expiry", highlighted: true },
+        { label: "Stock Valuation", path: "/inventory/reports/valuation", highlighted: true },
         { label: "Balance Summary", path: "#", highlighted: true },
         { label: "Projected Quantities", path: "#", highlighted: true },
         { label: "Inventory Ageing", path: "#" },

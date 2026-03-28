@@ -38,7 +38,7 @@ import {
 } from "../services/medicines";
 import DocumentActivityLog from "./common/DocumentActivityLog";
 
-const ItemDetails: React.FC = () => {
+const MedicineDetails: React.FC = () => {
   const { naming_series } = useParams<{ naming_series: string }>();
   const navigate = useNavigate();
   const [item, setItem] = useState<MedicineItem | null>(null);
@@ -1080,4 +1080,4 @@ const ItemDetails: React.FC = () => {
   );
 };
 
-export default ItemDetails;
+export default MedicineDetails;

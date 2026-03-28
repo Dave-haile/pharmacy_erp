@@ -29,7 +29,7 @@ class Sale(models.Model):
 
     posting_number = models.CharField(max_length=30, unique=True, blank=True)
     customer_name = models.CharField(max_length=200, blank=True)
-    invoice_number = models.CharField(max_length=50, db_index=True)
+    invoice_number = models.CharField(max_length=50, db_index=True, blank=True)
     cashier = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -54,9 +54,15 @@ class Sale(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
+        update_fields = []
         if is_new and not self.posting_number:
             self.posting_number = f"STOUT-{self.created_at.year}-{self.pk:04d}"
-            super().save(update_fields=["posting_number"])
+            update_fields.append("posting_number")
+        if is_new and not self.invoice_number:
+            self.invoice_number = f"INV-{self.created_at.year}-{self.pk:06d}"
+            update_fields.append("invoice_number")
+        if update_fields:
+            super().save(update_fields=update_fields)
 
     def __str__(self):
         return self.posting_number or f"Sale #{self.id}"

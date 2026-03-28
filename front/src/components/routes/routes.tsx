@@ -1,25 +1,42 @@
 import type { ReactNode } from "react";
-import Dashboard from "@/src/pages/Dashboard";
-import InventoryHub from "@/src/pages/InventoryHub";
-import Inventory from "@/src/pages/Inventory";
-import ItemMaster from "@/src/pages/ItemMaster";
-import ItemGrouping from "@/src/pages/ItemGrouping";
+import Dashboard from "@/src/pages/Dashboard/Dashboard";
+import InventoryHub from "@/src/pages/Hub/InventoryHub";
+import Inventory from "@/src/pages/Invetory/Inventory";
+import ItemMaster from "@/src/pages/Medicine/MedicineRegistary";
 import BatchDetails from "@/src/pages/BatchDetails";
 import StockInItems from "@/src/pages/stock-entries/StockInItems";
 import Login from "@/src/pages/Login";
-import AIAnalysis from "@/src/pages/AIAnalysis";
-import CreateItem from "@/src/components/CreateItem";
-import ItemDetails from "@/src/components/ItemDetails";
+import AIAnalysis from "@/src/pages/AIAnalysis/AIAnalysis";
+import MedicineDetails from "@/src/components/MedicineDetails";
 import StockEntry from "@/src/pages/stock-entries/StockEntry";
 import LandingPage from "@/src/pages/Landing/LandingPage";
 import { RouteGuard } from "../common/RouteGuard";
 import NotFound from "@/src/pages/NotFound";
-import AuditLogs from "@/src/pages/AuditLogs";
+import AuditLogs from "../../pages/Logs/AuditLogs";
 import SupplierRegistry from "@/src/pages/suppliers/SupplierRegistry";
 import SupplierForm from "@/src/pages/suppliers/SupplierForm";
 import SupplierDetails from "@/src/pages/suppliers/SupplierDetails";
 import StockOutRegistry from "@/src/pages/sales/StockOutRegistry";
 import StockOutDetails from "@/src/pages/sales/StockOutDetails";
+import StockOutPrint from "@/src/pages/sales/StockOutPrint";
+import CreateMedicine from "@/src/pages/Medicine/CreateMedicine";
+import CategoryRegistry from "@/src/pages/categories/CategoryRegistry";
+import CategoryForm from "@/src/pages/categories/CategoryForm";
+import CategoryDetails from "@/src/pages/categories/CategoryDetails";
+import StockLedgerPage from "@/src/pages/reports/StockLedger";
+import NearExpiryReport from "@/src/pages/reports/NearExpiryReport";
+import ValuationReport from "@/src/pages/reports/ValuationReport";
+import SalesSummaryReport from "@/src/pages/reports/SalesSummaryReport";
+import StockAdjustmentsRegistry from "@/src/pages/adjustments/StockAdjustmentsRegistry";
+import StockAdjustmentDetails from "@/src/pages/adjustments/StockAdjustmentDetails";
+import SalesReturnsRegistry from "@/src/pages/returns/SalesReturnsRegistry";
+import SalesReturnDetails from "@/src/pages/returns/SalesReturnDetails";
+import SupplierReturnsRegistry from "@/src/pages/returns/SupplierReturnsRegistry";
+import SupplierReturnDetails from "@/src/pages/returns/SupplierReturnDetails";
+import PurchasesRegistry from "@/src/pages/purchasing/PurchasesRegistry";
+import PurchaseDetails from "@/src/pages/purchasing/PurchaseDetails";
+import GrnRegistry from "@/src/pages/purchasing/GrnRegistry";
+import GrnDetails from "@/src/pages/purchasing/GrnDetails";
 interface RouteConfig {
   key: string;
   name: string;
@@ -70,6 +87,151 @@ const routes: RouteConfig[] = [
         <Inventory />
       </RouteGuard>
     ),
+  },
+  {
+    key: "stock-ledger",
+    name: "Stock Ledger",
+    path: "/inventory/stock-ledger",
+    element: (
+      <RouteGuard>
+        <StockLedgerPage />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "report-near-expiry",
+    name: "Near Expiry Report",
+    path: "/inventory/reports/near-expiry",
+    element: (
+      <RouteGuard>
+        <NearExpiryReport />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "report-valuation",
+    name: "Valuation Report",
+    path: "/inventory/reports/valuation",
+    element: (
+      <RouteGuard>
+        <ValuationReport />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "report-sales-summary",
+    name: "Sales Summary",
+    path: "/inventory/reports/sales-summary",
+    element: (
+      <RouteGuard>
+        <SalesSummaryReport />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-adjustments",
+    name: "Stock Adjustments",
+    path: "/inventory/stock-adjustments",
+    element: (
+      <RouteGuard>
+        <StockAdjustmentsRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-adjustment-details",
+    name: "Stock Adjustment",
+    path: "/inventory/stock-adjustments/:id",
+    element: (
+      <RouteGuard>
+        <StockAdjustmentDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "sales-returns",
+    name: "Customer Returns",
+    path: "/inventory/sales-returns",
+    element: (
+      <RouteGuard>
+        <SalesReturnsRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "sales-return-details",
+    name: "Customer Return",
+    path: "/inventory/sales-returns/:id",
+    element: (
+      <RouteGuard>
+        <SalesReturnDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "supplier-returns",
+    name: "Supplier Returns",
+    path: "/inventory/supplier-returns",
+    element: (
+      <RouteGuard>
+        <SupplierReturnsRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "supplier-return-details",
+    name: "Supplier Return",
+    path: "/inventory/supplier-returns/:id",
+    element: (
+      <RouteGuard>
+        <SupplierReturnDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "purchases",
+    name: "Purchases",
+    path: "/inventory/purchases",
+    element: (
+      <RouteGuard>
+        <PurchasesRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "purchase-details",
+    name: "Purchase",
+    path: "/inventory/purchases/:id",
+    element: (
+      <RouteGuard>
+        <PurchaseDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "grn",
+    name: "GRN",
+    path: "/inventory/grn",
+    element: (
+      <RouteGuard>
+        <GrnRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "grn-details",
+    name: "GRN Details",
+    path: "/inventory/grn/:id",
+    element: (
+      <RouteGuard>
+        <GrnDetails />
+      </RouteGuard>
+    ),
+    visible: false,
   },
   {
     key: "stock-in-items",
@@ -137,27 +299,47 @@ const routes: RouteConfig[] = [
     path: "inventory/medicines/new-medicine",
     element: (
       <RouteGuard>
-        <CreateItem />
+        <CreateMedicine />
       </RouteGuard>
     ),
   },
   {
-    key: "item-details",
-    name: "Item Details",
+    key: "medicine-details",
+    name: "Medicine Details",
     path: "inventory/medicines/:naming_series",
     element: (
       <RouteGuard>
-        <ItemDetails />
+        <MedicineDetails />
       </RouteGuard>
     ),
   },
   {
-    key: "item-grouping",
-    name: "Item Grouping",
+    key: "categories",
+    name: "Categories",
     path: "/inventory/categories",
     element: (
       <RouteGuard>
-        <ItemGrouping />
+        <CategoryRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "create-category",
+    name: "Create Category",
+    path: "/inventory/categories/new",
+    element: (
+      <RouteGuard>
+        <CategoryForm />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "category-details",
+    name: "Category Details",
+    path: "/inventory/categories/:naming_series",
+    element: (
+      <RouteGuard>
+        <CategoryDetails />
       </RouteGuard>
     ),
   },
@@ -206,19 +388,9 @@ const routes: RouteConfig[] = [
     ),
   },
   {
-    key: "sales",
-    name: "Sales",
-    path: "inventory/sales",
-    element: (
-      <RouteGuard>
-        <StockOutRegistry />
-      </RouteGuard>
-    ),
-  },
-  {
     key: "stock-out-registry",
     name: "Stock Out Register",
-    path: "inventory/sales/stock-outs",
+    path: "inventory/stock-outs",
     element: (
       <RouteGuard>
         <StockOutRegistry />
@@ -228,12 +400,23 @@ const routes: RouteConfig[] = [
   {
     key: "stock-out-details",
     name: "Stock Out",
-    path: "inventory/sales/stock-outs/:postingNumber",
+    path: "inventory/stock-outs/:postingNumber",
     element: (
       <RouteGuard>
         <StockOutDetails />
       </RouteGuard>
     ),
+  },
+  {
+    key: "stock-out-print",
+    name: "Print Stock Out",
+    path: "/inventory/stock-outs/:postingNumber/print",
+    element: (
+      <RouteGuard>
+        <StockOutPrint />
+      </RouteGuard>
+    ),
+    visible: false,
   },
   {
     key: "logs",

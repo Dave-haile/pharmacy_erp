@@ -213,8 +213,21 @@ export interface MedicineItem {
 export interface Category {
   id: number;
   name: string;
+  category_name?: string | null;
+  naming_series?: string | null;
   description: string;
+  parent_category_id?: number | null;
+  parent_category_name?: string | null;
+  medicine_count?: number;
+  child_count?: number;
   created_at: string;
+}
+
+export interface CreateCategory {
+  name: string;
+  category_name: string;
+  description: string;
+  parent_category_id: number | null;
 }
 export interface Supplier {
   id?: number;
@@ -238,6 +251,232 @@ export interface Log {
   details: string;
   user_id: number;
   username?: string | null;
+}
+
+export interface StockLedgerEntry {
+  transaction_id: number;
+  transaction_type: "purchase" | "sale" | "return" | "adjustment" | "damage";
+  medicine_id: number | null;
+  medicine_name: string;
+  batch_id: number | null;
+  batch_number: string;
+  quantity: number;
+  unit_price: string;
+  reference_document: string;
+  notes: string;
+  created_at: string;
+}
+
+export interface StockLedgerListResponse {
+  results: StockLedgerEntry[];
+  count: number;
+  total_pages: number;
+  current_page: number;
+  page_size: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface StockAdjustmentItemInput {
+  medicine_id: number | null;
+  batch_id: number | null;
+  quantity_change: string;
+  unit_cost: string;
+  notes: string;
+}
+
+export interface CreateStockAdjustment {
+  reason: string;
+  notes: string;
+  items: StockAdjustmentItemInput[];
+}
+
+export interface StockAdjustmentDetailItem {
+  id: number;
+  medicine_id: number;
+  medicine_name: string;
+  batch_id: number;
+  batch_number: string;
+  quantity_change: number;
+  unit_cost: string;
+  notes: string;
+}
+
+export interface StockAdjustmentSummary {
+  id: number;
+  posting_number: string;
+  reason: string;
+  reason_label: string;
+  status: "Draft" | "Posted" | "Cancelled";
+  status_key: "draft" | "posted" | "cancelled";
+  created_by: string;
+  created_by_id: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StockAdjustmentDetail extends StockAdjustmentSummary {
+  items: StockAdjustmentDetailItem[];
+}
+
+export interface PaginatedResponse<T> {
+  results: T[];
+  count: number;
+  total_pages: number;
+  current_page: number;
+  page_size: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface SalesReturnItemInput {
+  medicine_id: number | null;
+  batch_id: number | null;
+  quantity: string;
+  unit_price: string;
+  notes: string;
+}
+
+export interface CreateSalesReturn {
+  reference_invoice: string;
+  customer_name: string;
+  notes: string;
+  items: SalesReturnItemInput[];
+}
+
+export interface SalesReturnDetailItem {
+  id: number;
+  medicine_id: number;
+  medicine_name: string;
+  batch_id: number;
+  batch_number: string;
+  quantity: number;
+  unit_price: string;
+  notes: string;
+}
+
+export interface SalesReturnSummary {
+  id: number;
+  posting_number: string;
+  reference_invoice: string;
+  customer_name: string;
+  status: "Draft" | "Posted" | "Cancelled";
+  status_key: "draft" | "posted" | "cancelled";
+  created_by: string;
+  created_by_id: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesReturnDetail extends SalesReturnSummary {
+  items: SalesReturnDetailItem[];
+}
+
+export interface SupplierReturnItemInput {
+  medicine_id: number | null;
+  batch_id: number | null;
+  quantity: string;
+  unit_price: string;
+  notes: string;
+}
+
+export interface CreateSupplierReturn {
+  supplier_id: number | null;
+  reference_document: string;
+  notes: string;
+  items: SupplierReturnItemInput[];
+}
+
+export interface SupplierReturnDetailItem {
+  id: number;
+  medicine_id: number;
+  medicine_name: string;
+  batch_id: number;
+  batch_number: string;
+  quantity: number;
+  unit_price: string;
+  notes: string;
+}
+
+export interface SupplierReturnSummary {
+  id: number;
+  posting_number: string;
+  supplier_id: number;
+  supplier: string;
+  reference_document: string;
+  status: "Draft" | "Posted" | "Cancelled";
+  status_key: "draft" | "posted" | "cancelled";
+  created_by: string;
+  created_by_id: number;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SupplierReturnDetail extends SupplierReturnSummary {
+  items: SupplierReturnDetailItem[];
+}
+
+export interface PurchaseItem {
+  id: number;
+  medicine_id: number;
+  medicine_name: string;
+  quantity: number;
+  cost_price: string;
+  batch_id: number | null;
+  batch_number: string;
+  expiry_date: string;
+}
+
+export interface PurchaseSummary {
+  id: number;
+  supplier_id: number;
+  supplier: string;
+  status: string;
+  tax: string;
+  total_cost: string;
+  grand_total: string;
+  notes: string;
+  received_by_id: number;
+  received_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PurchaseDetail extends PurchaseSummary {
+  items: PurchaseItem[];
+}
+
+export interface GrnItem {
+  id: number;
+  medicine_id: number;
+  medicine_name: string;
+  quantity: number;
+  unit_price: string;
+  total_price: string;
+  batch_id: number | null;
+  batch_number: string;
+  expiry_date: string;
+}
+
+export interface GrnSummary {
+  id: number;
+  good_reciving_note_id: number;
+  purchase_id: number | null;
+  supplier_id: number | null;
+  supplier: string;
+  invoice_number: string;
+  total_amount: string;
+  received_by_id: number;
+  received_by: string;
+  received_at: string;
+  notes: string;
+}
+
+export interface GrnDetail extends GrnSummary {
+  items: GrnItem[];
 }
 
 export interface StockEntryItemInput {
