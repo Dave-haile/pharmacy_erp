@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import SearchableSelect from "../../components/SearchableSelect";
 import DocumentActivityLog from "../../components/common/DocumentActivityLog";
 import {
@@ -46,14 +51,17 @@ const StockAdjustmentDetails: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { id } = useParams<{ id: string }>();
-  const routeState = (location.state as { adjustmentId?: string | number } | null) || null;
+  const routeState =
+    (location.state as { adjustmentId?: string | number } | null) || null;
   const routeId = routeState?.adjustmentId ?? searchParams.get("id") ?? id;
   const isNew = id === "new";
 
   const { showError, showSuccess } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [inventoryItems, setInventoryItems] = useState<InventoryBatchItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryBatchItem[]>(
+    [],
+  );
   const [logs, setLogs] = useState<Log[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(!isNew);
@@ -73,7 +81,7 @@ const StockAdjustmentDetails: React.FC = () => {
   useEffect(() => {
     const loadInventory = async () => {
       try {
-        const response = await fetchInventoryOverview();
+        const response = await fetchInventoryOverview({ eligibleOnly: true });
         setInventoryItems(response.items);
       } catch (error: unknown) {
         showError(GetErrorMessage(error, "inventory", "load"));
@@ -146,18 +154,23 @@ const StockAdjustmentDetails: React.FC = () => {
   }, [inventoryItems]);
 
   const batchesByMedicine = useMemo(() => {
-    return inventoryItems.reduce<Record<number, InventoryBatchItem[]>>((acc, item) => {
-      if (!acc[item.medicine_id]) acc[item.medicine_id] = [];
-      acc[item.medicine_id].push(item);
-      return acc;
-    }, {});
+    return inventoryItems.reduce<Record<number, InventoryBatchItem[]>>(
+      (acc, item) => {
+        if (!acc[item.medicine_id]) acc[item.medicine_id] = [];
+        acc[item.medicine_id].push(item);
+        return acc;
+      },
+      {},
+    );
   }, [inventoryItems]);
 
   const canEditForm = isNew || isEditing;
   const canEditDraft = !isNew && !!docId && statusKey === "draft" && !isEditing;
-  const canAmendCancelled = !isNew && !!docId && statusKey === "cancelled" && !isEditing;
+  const canAmendCancelled =
+    !isNew && !!docId && statusKey === "cancelled" && !isEditing;
   const canPostDraft = !isNew && !!docId && statusKey === "draft" && !isEditing;
-  const canCancelPosted = !isNew && !!docId && statusKey === "posted" && !isEditing;
+  const canCancelPosted =
+    !isNew && !!docId && statusKey === "posted" && !isEditing;
 
   const setItemField = (
     index: number,
@@ -358,9 +371,15 @@ const StockAdjustmentDetails: React.FC = () => {
                   : "Draft"
           }
         />
-        <DocumentSummaryCard label="Lines" value={String(formData.items.length)} />
+        <DocumentSummaryCard
+          label="Lines"
+          value={String(formData.items.length)}
+        />
         <DocumentSummaryCard label="Reason" value={formData.reason} />
-        <DocumentSummaryCard label="Mode" value={canEditForm ? "Editing" : "Review"} />
+        <DocumentSummaryCard
+          label="Mode"
+          value={canEditForm ? "Editing" : "Review"}
+        />
       </section>
 
       {isLoading && (
@@ -369,7 +388,11 @@ const StockAdjustmentDetails: React.FC = () => {
         </div>
       )}
 
-      <form id="stock-adjustment-form" onSubmit={handleSave} className="space-y-6">
+      <form
+        id="stock-adjustment-form"
+        onSubmit={handleSave}
+        className="space-y-6"
+      >
         <DocumentCard
           title="Adjustment Details"
           description="Choose a reason and add notes."
@@ -415,7 +438,10 @@ const StockAdjustmentDetails: React.FC = () => {
               <button
                 type="button"
                 onClick={() =>
-                  setFormData((p) => ({ ...p, items: [...p.items, emptyItem()] }))
+                  setFormData((p) => ({
+                    ...p,
+                    items: [...p.items, emptyItem()],
+                  }))
                 }
                 className={documentSecondaryButtonClassName}
               >
@@ -442,7 +468,9 @@ const StockAdjustmentDetails: React.FC = () => {
                         label: opt.medicine_name,
                         subtitle: `${opt.category} · ${opt.medicine_total_quantity} in stock`,
                       }))}
-                      value={item.medicine_id != null ? String(item.medicine_id) : ""}
+                      value={
+                        item.medicine_id != null ? String(item.medicine_id) : ""
+                      }
                       onChange={(value) =>
                         setItemField(
                           index,
@@ -500,7 +528,9 @@ const StockAdjustmentDetails: React.FC = () => {
                   <DocumentField label="Line Notes">
                     <input
                       value={item.notes}
-                      onChange={(e) => setItemField(index, "notes", e.target.value)}
+                      onChange={(e) =>
+                        setItemField(index, "notes", e.target.value)
+                      }
                       className={documentInputClassName}
                       placeholder="Optional"
                       disabled={!canEditForm}
@@ -541,4 +571,3 @@ const StockAdjustmentDetails: React.FC = () => {
 };
 
 export default StockAdjustmentDetails;
-

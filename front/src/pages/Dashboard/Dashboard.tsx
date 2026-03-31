@@ -1,154 +1,84 @@
 import React, { useEffect, useState } from "react";
 import {
-  BarChart,
+  Area,
+  AreaChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  Cell,
-  PieChart,
-  Pie,
 } from "recharts";
 import { useNavigate } from "react-router-dom";
 import StatCard from "@/src/components/StatCard";
-import api from "@/src/services/api";
 import { useTheme } from "@/src/components/context/ThemeContext";
 import PageMeta from "@/src/components/common/PageMeta";
+import { DashboardResponse, fetchDashboard } from "@/src/services/dashboard";
 
-// Existing Monthly Production/Sales Data
-const monthlyData = [
-  { name: "Jan", sales: 4000, production: 2400, income: 125000 },
-  { name: "Feb", sales: 3000, production: 1398, income: 98000 },
-  { name: "Mar", sales: 2000, production: 9800, income: 142000 },
-  { name: "Apr", sales: 2780, production: 3908, income: 110000 },
-  { name: "May", sales: 1890, production: 4800, income: 135000 },
-  { name: "Jun", sales: 2390, production: 3800, income: 158000 },
-];
+const currencyCompact = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "ETB",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
 
-// New Weekly Sales Data
-const weeklySalesData = [
-  { day: "Mon", sales: 12400 },
-  { day: "Tue", sales: 15200 },
-  { day: "Wed", sales: 9800 },
-  { day: "Thu", sales: 18600 },
-  { day: "Fri", sales: 21000 },
-  { day: "Sat", sales: 4500 },
-  { day: "Sun", sales: 3200 },
-];
+const currencyFull = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "ETB",
+  maximumFractionDigits: 2,
+});
 
-// New Daily Sales Data (Hourly)
-const dailySalesData = [
-  { time: "08:00", sales: 1200 },
-  { time: "10:00", sales: 2500 },
-  { time: "12:00", sales: 4800 },
-  { time: "14:00", sales: 3200 },
-  { time: "16:00", sales: 5100 },
-  { time: "18:00", sales: 2800 },
-  { time: "20:00", sales: 1500 },
-];
+const integerFormatter = new Intl.NumberFormat("en-US");
 
-// New Revenue by Product Data
-const productRevenueData = [
-  { name: "Aspirin Pro", value: 45000, color: "#10b981" },
-  { name: "Metformin XL", value: 32000, color: "#6366f1" },
-  { name: "Amoxicillin", value: 28000, color: "#3b82f6" },
-  { name: "Lisinopril", value: 18000, color: "#f59e0b" },
-  { name: "Others", value: 12000, color: "#94a3b8" },
-];
+const formatCompactCurrency = (value: string | number | null | undefined) =>
+  currencyCompact.format(Number(value || 0));
 
-// Mock System Activity Logs
-const systemLogs = [
-  {
-    id: 1,
-    time: "14:22",
-    type: "success",
-    action: "Batch BT-9921",
-    message: "QA Verification Passed",
-    user: "System",
-  },
-  {
-    id: 2,
-    time: "13:45",
-    type: "info",
-    action: "Inventory",
-    message: "Stock Re-order: Amoxicillin (200kg)",
-    user: "L. Miller",
-  },
-  {
-    id: 3,
-    time: "12:10",
-    type: "warning",
-    action: "Compliance",
-    message: "Storage Temp Deviation: Area-C (+1.2C)",
-    user: "Sensor-8",
-  },
-  {
-    id: 4,
-    time: "10:30",
-    type: "success",
-    action: "Production",
-    message: "New Run Initiated: Aspirin Pro",
-    user: "A. Thorne",
-  },
-  {
-    id: 5,
-    time: "09:15",
-    type: "info",
-    action: "System",
-    message: "User Dr. Aris Thorne Logged In",
-    user: "AuthSvc",
-  },
-  {
-    id: 6,
-    time: "08:45",
-    type: "success",
-    action: "Logistics",
-    message: "Order #SH-2201 Dispatched",
-    user: "Warehouse-1",
-  },
-  {
-    id: 7,
-    time: "07:20",
-    type: "info",
-    action: "Audit",
-    message: "Weekly Security Scan Completed",
-    user: "SecBot",
-  },
-];
+const formatCurrency = (value: string | number | null | undefined) =>
+  currencyFull.format(Number(value || 0));
 
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<any>(null);
-  const [inventory, setInventory] = useState<any[]>([]);
+  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [salesView, setSalesView] = useState<"weekly" | "daily">("weekly");
   const navigate = useNavigate();
   const { theme } = useTheme();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, invRes] = await Promise.all([
-          api.get("/api/dashboard/stats"),
-          api.get("/api/inventory"),
-        ]);
-        setStats(statsRes.data);
-        setInventory(invRes.data.items ?? []);
-      } catch (error) {
-        console.error("Failed to fetch dashboard data", error);
-      } finally {
+  const loadDashboard = async (options?: {
+    refresh?: boolean;
+    showLoader?: boolean;
+  }) => {
+    const { refresh = false, showLoader = !dashboard } = options || {};
+
+    if (showLoader) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    try {
+      const data = await fetchDashboard({ refresh });
+      setDashboard(data);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data", error);
+    } finally {
+      if (showLoader) {
         setIsLoading(false);
+      } else {
+        setIsRefreshing(false);
       }
-    };
-    fetchData();
+    }
+  };
+
+  useEffect(() => {
+    void loadDashboard();
   }, []);
 
-  const lowStockItems = inventory.filter((item) => item.quantity < 10);
-
-  if (isLoading)
+  if (isLoading) {
     return (
       <div className="p-8 text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-3"></div>
@@ -157,6 +87,63 @@ const Dashboard: React.FC = () => {
         </p>
       </div>
     );
+  }
+
+  if (!dashboard) {
+    return (
+      <div className="p-8 text-center">
+        <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Dashboard data could not be loaded.
+        </p>
+      </div>
+    );
+  }
+
+  const salesData =
+    salesView === "weekly"
+      ? dashboard.charts.weekly_sales.map((item) => ({
+          ...item,
+          sales: Number(item.sales || 0),
+        }))
+      : dashboard.charts.daily_sales.map((item) => ({
+          ...item,
+          sales: Number(item.sales || 0),
+        }));
+
+  const monthlyRevenueData = dashboard.charts.monthly_revenue.map((item) => ({
+    ...item,
+    income: Number(item.income || 0),
+  }));
+
+  const productRevenueData = dashboard.top_products.map((item) => ({
+    ...item,
+    value: Number(item.value || 0),
+  }));
+
+  const inventoryStatusData = [
+    {
+      name: "In Stock",
+      value: dashboard.inventory_status.in_stock,
+      color: "#10b981",
+    },
+    {
+      name: "Low Stock",
+      value: dashboard.inventory_status.low_stock,
+      color: "#ef4444",
+    },
+    {
+      name: "Expiring",
+      value: dashboard.inventory_status.expiring_soon,
+      color: "#f59e0b",
+    },
+    {
+      name: "Expired",
+      value: dashboard.inventory_status.expired,
+      color: "#64748b",
+    },
+  ];
+
+  const lowStockItems = dashboard.alerts;
 
   return (
     <div className="space-y-4 md:space-y-6 animate-in fade-in duration-500 pb-16">
@@ -164,30 +151,58 @@ const Dashboard: React.FC = () => {
         title="Dashboard"
         description="Comprehensive dashboard for pharmaceutical operations management"
       />
+
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2">
         <div>
           <h1 className="text-lg md:text-xl font-black text-slate-800 dark:text-white tracking-tight uppercase">
             Executive Intelligence
           </h1>
           <p className="text-slate-500 dark:text-slate-400 font-medium text-[10px] md:text-xs">
-            Global pharmaceutical operations & financial health
+            Live pharmacy sales, inventory risk, and activity reporting
           </p>
         </div>
         <div className="flex space-x-1.5 w-full sm:w-auto">
-          <button className="flex-1 sm:flex-none bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm">
-            Generate Audit
+          <button
+            onClick={() =>
+              void loadDashboard({ refresh: true, showLoader: false })
+            }
+            disabled={isRefreshing}
+            className="flex-1 sm:flex-none bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M4 4v5h.582M20 20v-5h-.581M5.8 9A7 7 0 0119 11m-.8 4A7 7 0 015 13"
+              />
+            </svg>
+            {isRefreshing ? "Refreshing" : "Refresh"}
           </button>
-          <button className="flex-1 sm:flex-none bg-slate-900 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white hover:bg-slate-800 shadow-xl transition-all">
-            + Production
+          <button
+            onClick={() => navigate("/inventory")}
+            className="flex-1 sm:flex-none bg-white dark:bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
+          >
+            View Inventory
+          </button>
+          <button
+            onClick={() => navigate("/inventory/stock-outs")}
+            className="flex-1 sm:flex-none bg-slate-900 px-2.5 py-1.5 rounded-lg text-[10px] font-bold text-white hover:bg-slate-800 shadow-xl transition-all"
+          >
+            Sales Desk
           </button>
         </div>
       </header>
 
-      {/* Primary Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <StatCard
           title="Today's Sales"
-          value={stats?.todaySales || "$42.5k"}
+          value={formatCompactCurrency(dashboard.kpis.today_sales)}
           icon={
             <svg
               className="w-5 h-5 text-emerald-600"
@@ -203,13 +218,13 @@ const Dashboard: React.FC = () => {
               />
             </svg>
           }
-          trend="+12% from yesterday"
+          trend={`${dashboard.kpis.today_sales_trend} | ${dashboard.kpis.today_sales_count} posted`}
           trendColor="text-emerald-600"
           colorClass="bg-emerald-50"
         />
         <StatCard
           title="Total Products"
-          value={stats?.totalProducts || "458 SKU"}
+          value={integerFormatter.format(dashboard.kpis.total_products)}
           icon={
             <svg
               className="w-5 h-5 text-blue-600"
@@ -225,13 +240,13 @@ const Dashboard: React.FC = () => {
               />
             </svg>
           }
-          trend="Active in catalog"
+          trend={dashboard.kpis.total_products_trend}
           trendColor="text-slate-400"
           colorClass="bg-blue-50"
         />
         <StatCard
           title="Low Stock Items"
-          value={stats?.lowStockCount || lowStockItems.length}
+          value={integerFormatter.format(dashboard.kpis.low_stock_count)}
           icon={
             <svg
               className="w-5 h-5 text-red-600"
@@ -247,13 +262,13 @@ const Dashboard: React.FC = () => {
               />
             </svg>
           }
-          trend="Requires attention"
+          trend={dashboard.kpis.low_stock_trend}
           trendColor="text-red-500"
           colorClass="bg-red-50"
         />
         <StatCard
           title="Total Suppliers"
-          value={stats?.totalSuppliers || "24"}
+          value={integerFormatter.format(dashboard.kpis.total_suppliers)}
           icon={
             <svg
               className="w-5 h-5 text-amber-600"
@@ -269,18 +284,16 @@ const Dashboard: React.FC = () => {
               />
             </svg>
           }
-          trend="Verified partners"
+          trend={dashboard.kpis.total_suppliers_trend}
           trendColor="text-amber-600"
           colorClass="bg-amber-50"
         />
       </div>
 
-      {/* Main Insights Section */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 md:gap-6">
         <div className="lg:col-span-3 space-y-4 md:space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-            {/* Sales Performance Chart (Daily/Weekly) */}
-            <div className="bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+            <div className="bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors min-w-0">
               <div className="flex justify-between items-center mb-3 md:mb-4">
                 <div>
                   <h3 className="text-sm md:text-base font-black text-slate-800 dark:text-white tracking-tight">
@@ -288,8 +301,8 @@ const Dashboard: React.FC = () => {
                   </h3>
                   <p className="text-[9px] md:text-[10px] text-slate-400 font-medium">
                     {salesView === "weekly"
-                      ? "Weekly trend analysis"
-                      : "Daily hourly breakdown"}
+                      ? "Posted sales over the last 7 days"
+                      : "Today grouped into 3-hour windows"}
                   </p>
                 </div>
                 <div className="flex bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
@@ -315,29 +328,32 @@ const Dashboard: React.FC = () => {
                   </button>
                 </div>
               </div>
-              <div className="h-[130px] md:h-[150px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={
-                      salesView === "weekly" ? weeklySalesData : dailySalesData
-                    }
-                  >
+              <div className="h-[130px] md:h-[150px] min-w-0 min-h-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={1}
+                  minHeight={1}
+                >
+                  <BarChart data={salesData}>
                     <CartesianGrid
                       strokeDasharray="3 3"
                       vertical={false}
                       stroke="#f1f5f9"
                     />
                     <XAxis
-                      dataKey={salesView === "weekly" ? "day" : "time"}
+                      dataKey="label"
                       axisLine={false}
                       tickLine={false}
                       tick={{ fontSize: 9, fontWeight: 700, fill: "#94a3b8" }}
+                      interval="preserveStartEnd"
                     />
                     <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
                       cursor={{
-                        fill: theme === "dark" ? "#334155" : "#f8fafc", // Dark: slate-700, Light: white
+                        fill: theme === "dark" ? "#334155" : "#f8fafc",
                         radius: 6,
-                        opacity: theme === "dark" ? 0.5 : 1, // Optional: adjust opacity for dark mode
+                        opacity: theme === "dark" ? 0.5 : 1,
                       }}
                       contentStyle={{
                         borderRadius: "8px",
@@ -346,21 +362,20 @@ const Dashboard: React.FC = () => {
                         border: "none",
                         boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
                         fontSize: "10px",
-                        color: theme === "dark" ? "#e2e8f0" : "#0f172a", // Text color for tooltip
+                        color: theme === "dark" ? "#e2e8f0" : "#0f172a",
                       }}
                     />
                     <Bar
                       dataKey="sales"
                       radius={[4, 4, 0, 0]}
                       fill="#10b981"
-                      barSize={salesView === "weekly" ? 24 : 16}
+                      barSize={salesView === "weekly" ? 24 : 12}
                     />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            {/* System Pulse */}
             <div className="bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-colors">
               <div className="flex justify-between items-center mb-3">
                 <div>
@@ -368,7 +383,7 @@ const Dashboard: React.FC = () => {
                     System Pulse
                   </h3>
                   <p className="text-[9px] md:text-[10px] text-slate-400 font-medium">
-                    Live activity log
+                    Recent audit activity
                   </p>
                 </div>
                 <div className="flex items-center space-x-1">
@@ -380,7 +395,7 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-2.5 max-h-[130px] md:max-h-[150px] pr-1.5 custom-scrollbar">
-                {systemLogs.map((log) => (
+                {dashboard.recent_activity.map((log) => (
                   <div
                     key={log.id}
                     className="flex items-start space-x-2.5 group"
@@ -395,11 +410,11 @@ const Dashboard: React.FC = () => {
                       }`}
                     ></div>
                     <div className="flex-1">
-                      <div className="flex justify-between items-baseline">
-                        <p className="text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-tight">
+                      <div className="flex justify-between items-baseline gap-2">
+                        <p className="text-[10px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-tight truncate">
                           {log.action}
                         </p>
-                        <span className="text-[8px] font-bold text-slate-400">
+                        <span className="text-[8px] font-bold text-slate-400 shrink-0">
                           {log.time}
                         </span>
                       </div>
@@ -414,17 +429,21 @@ const Dashboard: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-            {/* Monthly Financial Growth */}
-            <div className="md:col-span-2 bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors">
+            <div className="md:col-span-2 bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 transition-colors min-w-0">
               <h3 className="text-sm md:text-base font-black text-slate-800 dark:text-white mb-1">
                 Monthly Revenue
               </h3>
               <p className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-3 md:mb-4">
-                Fiscal performance (6 mo)
+                Posted sales for the last 6 months
               </p>
-              <div className="h-[180px] md:h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={monthlyData}>
+              <div className="h-[180px] md:h-[220px] min-w-0 min-h-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={1}
+                  minHeight={1}
+                >
+                  <AreaChart data={monthlyRevenueData}>
                     <defs>
                       <linearGradient
                         id="colorIncome"
@@ -452,7 +471,7 @@ const Dashboard: React.FC = () => {
                       opacity={0.1}
                     />
                     <XAxis
-                      dataKey="name"
+                      dataKey="month"
                       stroke="#cbd5e1"
                       fontSize={10}
                       tickLine={false}
@@ -463,9 +482,10 @@ const Dashboard: React.FC = () => {
                       fontSize={10}
                       tickLine={false}
                       axisLine={false}
-                      tickFormatter={(val) => `$${val / 1000}k`}
+                      tickFormatter={(value) => formatCompactCurrency(value)}
                     />
                     <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
                       contentStyle={{
                         borderRadius: "16px",
                         border: "none",
@@ -488,16 +508,20 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Revenue by Product */}
-            <div className="bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col transition-colors">
+            <div className="bg-white dark:bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col transition-colors min-w-0 min-h-0">
               <h3 className="text-sm md:text-base font-black text-slate-800 dark:text-white mb-1">
                 Contribution
               </h3>
               <p className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-3">
-                Revenue by SKU
+                Top products by revenue
               </p>
-              <div className="flex-1 min-h-[130px] md:min-h-[150px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="flex-1 min-h-[130px] md:min-h-[150px] min-w-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={1}
+                  minHeight={1}
+                >
                   <PieChart>
                     <Pie
                       data={productRevenueData}
@@ -510,7 +534,9 @@ const Dashboard: React.FC = () => {
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -530,7 +556,7 @@ const Dashboard: React.FC = () => {
                       </span>
                     </div>
                     <span className="text-[9px] font-black text-slate-800 dark:text-slate-200">
-                      ${(item.value / 1000).toFixed(1)}k
+                      {formatCompactCurrency(item.value)}
                     </span>
                   </div>
                 ))}
@@ -539,37 +565,48 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Tactical Sidebar */}
         <div className="lg:col-span-1 space-y-3">
-          <div className="bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-xl text-white">
+          <div className="bg-slate-900 p-3 md:p-4 rounded-xl md:rounded-2xl shadow-xl text-white min-w-0">
             <h3 className="text-[10px] md:text-xs font-black mb-3 uppercase tracking-wider text-slate-400 text-center lg:text-left">
-              Efficiency
+              Inventory Health
             </h3>
-            <div className="h-[80px] md:h-[100px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyData.slice(-4)}>
-                  <Bar
-                    dataKey="production"
-                    fill="#3b82f6"
-                    radius={[3, 3, 3, 3]}
-                    barSize={10}
-                  />
-                  <Bar
-                    dataKey="sales"
-                    fill="#10b981"
-                    radius={[3, 3, 3, 3]}
-                    barSize={10}
-                  />
+            <div className="h-[80px] md:h-[100px] min-w-0 min-h-0">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={1}
+                minHeight={1}
+              >
+                <BarChart data={inventoryStatusData}>
+                  <XAxis dataKey="name" hide />
+                  <Bar dataKey="value" radius={[3, 3, 3, 3]} barSize={18}>
+                    {inventoryStatusData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
             <div className="mt-4 pt-4 border-t border-slate-800 space-y-2">
               <div className="flex justify-between items-center text-[10px]">
-                <span className="font-bold text-slate-500">Output Ratio</span>
-                <span className="font-black text-emerald-400">0.92</span>
+                <span className="font-bold text-slate-500">
+                  Inventory Value
+                </span>
+                <span className="font-black text-emerald-400">
+                  {formatCompactCurrency(dashboard.kpis.inventory_value)}
+                </span>
               </div>
-              <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                <div className="bg-emerald-500 h-full w-[92%]"></div>
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="font-bold text-slate-500">Units on Hand</span>
+                <span className="font-black text-slate-100">
+                  {integerFormatter.format(dashboard.kpis.inventory_units)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="font-bold text-slate-500">Expiring Soon</span>
+                <span className="font-black text-amber-300">
+                  {integerFormatter.format(dashboard.kpis.expiring_soon_count)}
+                </span>
               </div>
             </div>
           </div>
@@ -618,6 +655,11 @@ const Dashboard: React.FC = () => {
                           </span>
                         </div>
                       </div>
+                      <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold">
+                        {item.days_to_expiry > 0
+                          ? `${item.days_to_expiry}d`
+                          : "Review"}
+                      </span>
                     </div>
                   </div>
                 ))}

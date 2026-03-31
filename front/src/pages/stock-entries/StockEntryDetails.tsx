@@ -15,6 +15,7 @@ import {
 import {
   cancelStockEntry,
   createStockEntry,
+  deleteStockEntry,
   fetchStockEntries,
   fetchStockEntryById,
   fetchStockEntryLogs,
@@ -68,6 +69,7 @@ const StockEntryPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [logs, setLogs] = useState<Log[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
@@ -84,7 +86,10 @@ const StockEntryPage: React.FC = () => {
     items: [emptyItem()],
   });
 
-  const { supplierGroups } = useSuppliers(supplierInputSearch);
+  const { supplierGroups } = useSuppliers(supplierInputSearch, {
+    status: "Submitted",
+    is_active: "true",
+  });
   const routeState =
     (location.state as { stockEntryId?: string | number } | null) || null;
   const routeStockEntryId = routeState?.stockEntryId ?? searchParams.get("id");
@@ -538,6 +543,61 @@ const StockEntryPage: React.FC = () => {
     setIsActionsOpen(false);
   };
 
+  const handleDelete = async () => {
+    if (!stockEntryId || isNewEntry) return;
+
+    if (currentStatusKey === "posted") {
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Delete Stock Entry",
+        message:
+          "This stock entry is posted. Cancel the document before deleting it.",
+        confirmLabel: "OK",
+      });
+      return;
+    }
+
+    const { confirmed } = await confirm({
+      title: "Delete Stock Entry",
+      message:
+        "This will permanently delete this stock entry. You cannot undo this action.",
+      confirmLabel: "Delete Entry",
+      cancelLabel: "Back",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await deleteStockEntry(stockEntryId);
+      showSuccess(response.message || "Stock entry deleted successfully.");
+      navigate("/inventory/stock-entries");
+    } catch (error: unknown) {
+      const message =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response
+          ? (error.response as { data?: { error?: string; message?: string } })
+              ?.data?.error ||
+            (error.response as { data?: { error?: string; message?: string } })
+              ?.data?.message
+          : "Failed to delete stock entry.";
+
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Delete Stock Entry",
+        message,
+        confirmLabel: "OK",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const isExistingEntryLoading = stockEntryQuery.isLoading && !isNewEntry;
   const canEditForm = isNewEntry || isEditing;
   const canEditDraft =
@@ -692,6 +752,13 @@ const StockEntryPage: React.FC = () => {
               onPrint={handlePrint}
               onShare={handleShare}
               onExport={handleExport}
+              onDelete={() => {
+                void handleDelete();
+                setIsActionsOpen(false);
+              }}
+              deleteLabel={
+                isDeleting ? "Deleting Stock Entry..." : "Delete Stock Entry"
+              }
             />
           </>
         }

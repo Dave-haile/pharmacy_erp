@@ -5,6 +5,7 @@ import { useToast } from "../../hooks/useToast";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import {
   cancelSupplier,
+  deleteSupplier,
   fetchSupplierByNamingSeries,
   fetchSupplierLogs,
   updateSupplier,
@@ -87,6 +88,7 @@ const SupplierDetails: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     const loadSupplier = async () => {
@@ -252,6 +254,82 @@ const SupplierDetails: React.FC = () => {
       showSuccess(response.message || "Supplier cancelled successfully.");
     } catch (error: unknown) {
       showError(GetErrorMessage(error, "supplier", "cancel"));
+    }
+  };
+
+  const handleDeleteSupplier = async () => {
+    if (!supplier?.id) return;
+
+    if (supplier.status === "Submitted") {
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Delete Supplier",
+        message:
+          "This supplier is submitted. Cancel the document before deleting it.",
+        confirmLabel: "OK",
+      });
+      return;
+    }
+
+    const result = await confirm({
+      title: "Delete Supplier",
+      message:
+        "This will permanently delete this supplier. You cannot undo this action.",
+      confirmLabel: "Delete Supplier",
+      cancelLabel: "Back",
+      variant: "danger",
+    });
+
+    if (!result.confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await deleteSupplier(supplier.id);
+      showSuccess(response.message || "Supplier deleted successfully.");
+      navigate("/inventory/suppliers");
+    } catch (error: unknown) {
+      const errorResponse =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response &&
+        typeof error.response === "object" &&
+        "data" in error.response
+          ? (
+              error.response as {
+                data?: {
+                  error?: string;
+                  linked_medicine?: {
+                    id?: number;
+                    name?: string;
+                    naming_series?: string | null;
+                  };
+                };
+              }
+            ).data
+          : undefined;
+      const linkedMedicine = errorResponse?.linked_medicine;
+
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Delete Supplier",
+        message:
+          errorResponse?.error || GetErrorMessage(error, "supplier", "delete"),
+        content: linkedMedicine?.naming_series ? (
+          <a
+            href={`/inventory/medicines/${linkedMedicine.naming_series}`}
+            className="inline-flex text-xs font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-emerald-300 hover:underline"
+          >
+            Open linked medicine:{" "}
+            {linkedMedicine.name || linkedMedicine.naming_series}
+          </a>
+        ) : null,
+        confirmLabel: "OK",
+      });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -424,7 +502,7 @@ const SupplierDetails: React.FC = () => {
               className="flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
             >
               <Edit2 className="h-4 w-4" />
-              Edit
+              {supplier.status === "Cancelled" ? "Amend" : "Edit"}
             </button>
           )}
           {isEditing && (
@@ -477,6 +555,13 @@ const SupplierDetails: React.FC = () => {
               handleExport();
               setIsActionsOpen(false);
             }}
+            onDelete={() => {
+              void handleDeleteSupplier();
+              setIsActionsOpen(false);
+            }}
+            deleteLabel={
+              isDeleting ? "Deleting Supplier..." : "Delete Supplier"
+            }
           />
         </div>
       </header>

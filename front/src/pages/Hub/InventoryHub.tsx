@@ -1,40 +1,21 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  Tooltip,
-  ResponsiveContainer,
-  AreaChart,
   Area,
-  PieChart,
-  Pie,
+  AreaChart,
+  Bar,
+  BarChart,
   Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
 } from "recharts";
-
-const stockLevelData = [
-  { category: "Tablets", stock: 4500 },
-  { category: "Syrups", stock: 2800 },
-  { category: "Injections", stock: 1200 },
-  { category: "Creams", stock: 3400 },
-  { category: "Others", stock: 1800 },
-];
-
-const inventoryValueTrend = [
-  { month: "Jan", value: 450000 },
-  { month: "Feb", value: 480000 },
-  { month: "Mar", value: 420000 },
-  { month: "Apr", value: 510000 },
-  { month: "May", value: 540000 },
-  { month: "Jun", value: 590000 },
-];
-
-const stockDistribution = [
-  { name: "Raw Materials", value: 40, color: "#10b981" },
-  { name: "WIP", value: 25, color: "#3b82f6" },
-  { name: "Finished Goods", value: 35, color: "#6366f1" },
-];
+import {
+  fetchInventoryHubSummary,
+  InventoryHubSummaryResponse,
+} from "@/src/services/inventoryHub";
 
 interface LinkItem {
   label: string;
@@ -53,6 +34,15 @@ interface SectionProps {
   actionButton?: React.ReactNode;
 }
 
+const currencyCompact = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+const integerFormatter = new Intl.NumberFormat("en-US");
+
 const CategorySection: React.FC<SectionProps> = ({
   title,
   subtitle,
@@ -64,7 +54,7 @@ const CategorySection: React.FC<SectionProps> = ({
   const navigate = useNavigate();
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+    <div className="flex flex-col self-start w-full bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
       <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center space-x-2.5 min-w-0">
@@ -145,6 +135,26 @@ const CategorySection: React.FC<SectionProps> = ({
 
 const InventoryHub: React.FC = () => {
   const navigate = useNavigate();
+  const [hubSummary, setHubSummary] = useState<InventoryHubSummaryResponse | null>(
+    null,
+  );
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadHubSummary = async () => {
+      try {
+        const data = await fetchInventoryHubSummary();
+        setHubSummary(data);
+      } catch (error) {
+        console.error("Failed to fetch inventory hub summary", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadHubSummary();
+  }, []);
+
   const sections: SectionProps[] = [
     {
       title: "Items & Pricing",
@@ -178,13 +188,6 @@ const InventoryHub: React.FC = () => {
           highlighted: true,
         },
         { label: "Supplier", path: "/inventory/suppliers", highlighted: true },
-        { label: "Product Bundles", path: "#", highlighted: true },
-        { label: "Global Price List", path: "#" },
-        { label: "SKU Pricing", path: "#" },
-        { label: "Shipping Rules", path: "#" },
-        { label: "Item Alternatives", path: "#" },
-        { label: "Manufacturer Registry", path: "#" },
-        { label: "Customs Tariff Database", path: "#" },
       ],
     },
     {
@@ -207,7 +210,6 @@ const InventoryHub: React.FC = () => {
         </svg>
       ),
       links: [
-        { label: "Material Requests", path: "#", highlighted: true },
         {
           label: "Warehouse Stock Entry",
           path: "/inventory/stock-entries",
@@ -236,13 +238,6 @@ const InventoryHub: React.FC = () => {
           path: "/inventory/supplier-returns",
           highlighted: true,
         },
-        { label: "Delivery Notes", path: "#", highlighted: true },
-        { label: "Goods Receiving Voucher", path: "/inventory/grn", active: true },
-        { label: "Pick & Pack List", path: "#", highlighted: true },
-        { label: "Delivery Trip Planner", path: "#" },
-        { label: "Internal Requisitions", path: "#" },
-        { label: "Purchase Request", path: "#" },
-        { label: "Temporary Movement", path: "#" },
       ],
       actionButton: (
         <button
@@ -286,24 +281,62 @@ const InventoryHub: React.FC = () => {
         </svg>
       ),
       links: [
-        { label: "Stock Ledger", path: "/inventory/stock-ledger", highlighted: true },
-        { label: "Sales Summary", path: "/inventory/reports/sales-summary", highlighted: true },
-        { label: "Near-Expiry Report", path: "/inventory/reports/near-expiry", highlighted: true },
-        { label: "Stock Valuation", path: "/inventory/reports/valuation", highlighted: true },
-        { label: "Balance Summary", path: "#", highlighted: true },
-        { label: "Projected Quantities", path: "#", highlighted: true },
-        { label: "Inventory Ageing", path: "#" },
-        { label: "Price vs Stock Audit", path: "#" },
-        { label: "Master Compliance Report", path: "#" },
-        { label: "Purchase Journey Map", path: "#" },
+        {
+          label: "Stock Ledger",
+          path: "/inventory/stock-ledger",
+          highlighted: true,
+        },
+        {
+          label: "Sales Summary",
+          path: "/inventory/sales-summary",
+          highlighted: true,
+        },
+        {
+          label: "Near-Expiry Report",
+          path: "/inventory/near-expiry",
+          highlighted: true,
+        },
+        {
+          label: "Stock Valuation",
+          path: "/inventory/valuation",
+          highlighted: true,
+        },
       ],
     },
   ];
 
+  const stockLevelData =
+    hubSummary?.category_stock_levels.map((item) => ({
+      ...item,
+      stock: Number(item.stock || 0),
+    })) ?? [];
+
+  const inventoryValueTrend =
+    hubSummary?.inventory_value_trend.map((item) => ({
+      ...item,
+      value: Number(item.value || 0),
+    })) ?? [];
+
+  const stockDistribution = hubSummary?.stock_distribution ?? [];
+
+  const topLevelBadge =
+    hubSummary && stockLevelData.length > 0
+      ? `${integerFormatter.format(hubSummary.summary.total_quantity)} units`
+      : "Live";
+  const valueTrendBadge =
+    hubSummary && inventoryValueTrend.length > 1
+      ? `${currencyCompact.format(Number(hubSummary.summary.total_value || 0))}`
+      : "Live";
+  const stockDistributionBadge =
+    hubSummary && stockDistribution.length > 0
+      ? `${integerFormatter.format(
+          stockDistribution.reduce((sum, item) => sum + item.value, 0),
+        )} batches`
+      : "Live";
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700 pb-12">
       <header className="relative py-6 md:py-10 flex flex-col items-center text-center overflow-hidden border-b border-slate-200 dark:border-slate-800 -mx-2.5 md:-mx-5 px-2.5 md:px-5 mb-6">
-        {/* Subtle Background Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-slate-50 dark:bg-slate-900/20 -z-20" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-emerald-500/5 dark:bg-emerald-500/10 blur-[100px] rounded-full -z-10" />
 
@@ -322,161 +355,171 @@ const InventoryHub: React.FC = () => {
           <span className="text-emerald-600 dark:text-emerald-400">Hub</span>
         </h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-5xl animate-in slide-in-from-top duration-1000">
-          {/* Graph 1: Stock Levels */}
-          <div className="bg-white dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-sm">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                Category Stock Levels
-              </h3>
-              <span className="text-[8px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">
-                +4.2%
-              </span>
-            </div>
-            <div className="h-24">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stockLevelData}>
-                  <Bar dataKey="stock" fill="#10b981" radius={[2, 2, 0, 0]} />
-                  <XAxis dataKey="category" hide />
-                  <Tooltip
-                    cursor={{ fill: "transparent" }}
-                    contentStyle={{
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                      fontSize: "8px",
-                      backgroundColor: "#0f172a",
-                      color: "#fff",
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        {isLoading ? (
+          <div className="py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600 mx-auto mb-3"></div>
+            <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px]">
+              Building inventory intelligence...
+            </p>
           </div>
-
-          {/* Graph 2: Inventory Value */}
-          <div className="bg-white dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-sm">
-            <div className="flex justify-between items-center mb-3">
-              <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                Inventory Value Trend
-              </h3>
-              <span className="text-[8px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">
-                Stable
-              </span>
-            </div>
-            <div className="h-24">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={inventoryValueTrend}>
-                  <defs>
-                    <linearGradient id="valueGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <Area
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    fill="url(#valueGrad)"
-                  />
-                  <XAxis dataKey="month" hide />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "8px",
-                      border: "none",
-                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                      fontSize: "8px",
-                      backgroundColor: "#0f172a",
-                      color: "#fff",
-                    }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Graph 3: Stock Distribution */}
-          <div className="bg-white dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-sm flex items-center">
-            <div className="flex-1">
-              <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                Stock Distribution
-              </h3>
-              <div className="h-24">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={stockDistribution}
-                      innerRadius={22}
-                      outerRadius={38}
-                      paddingAngle={4}
-                      dataKey="value"
-                      stroke="none"
-                    >
-                      {stockDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-5xl animate-in slide-in-from-top duration-1000">
+            <div className="bg-white dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-sm min-w-0 min-h-0">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  Category Stock Levels
+                </h3>
+                <span className="text-[8px] font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-900/20 px-1.5 py-0.5 rounded-full">
+                  {topLevelBadge}
+                </span>
+              </div>
+              <div className="h-24 min-w-0 min-h-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={1}
+                  minHeight={1}
+                >
+                  <BarChart data={stockLevelData}>
+                    <Bar dataKey="stock" fill="#10b981" radius={[2, 2, 0, 0]} />
+                    <XAxis dataKey="category" hide />
                     <Tooltip
+                      formatter={(value: number) =>
+                        `${integerFormatter.format(value)} units`
+                      }
+                      cursor={{ fill: "transparent" }}
                       contentStyle={{
                         borderRadius: "8px",
                         border: "none",
                         boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
                         fontSize: "8px",
-                        // backgroundColor: "#0f172a",
+                        backgroundColor: "#0f172a",
                         color: "#fff",
                       }}
                     />
-                  </PieChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="space-y-1.5 ml-2 pr-2">
-              {stockDistribution.map((item) => (
-                <div key={item.name} className="flex items-center space-x-1.5">
-                  <div
-                    className="w-1.5 h-1.5 rounded-full shrink-0"
-                    style={{ backgroundColor: item.color }}
-                  ></div>
-                  <span className="text-[7px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter truncate w-14 leading-none">
-                    {item.name}
+
+            <div className="bg-white dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-sm min-w-0">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                  On-Hand Value by Intake Month
+                </h3>
+                <span className="text-[8px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-1.5 py-0.5 rounded-full">
+                  {valueTrendBadge}
+                </span>
+              </div>
+              <div className="h-24 min-w-0 min-h-0">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={1}
+                  minHeight={1}
+                >
+                  <AreaChart data={inventoryValueTrend}>
+                    <defs>
+                      <linearGradient id="valueGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#6366f1"
+                      strokeWidth={2}
+                      fill="url(#valueGrad)"
+                    />
+                    <XAxis dataKey="month" hide />
+                    <Tooltip
+                      formatter={(value: number) => currencyCompact.format(value)}
+                      contentStyle={{
+                        borderRadius: "8px",
+                        border: "none",
+                        boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
+                        fontSize: "8px",
+                        backgroundColor: "#0f172a",
+                        color: "#fff",
+                      }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900/40 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm backdrop-blur-sm flex items-center min-w-0 min-h-0">
+              <div className="flex-1">
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                    Stock Distribution
+                  </h3>
+                  <span className="text-[8px] font-bold text-violet-500 bg-violet-50 dark:bg-violet-900/20 px-1.5 py-0.5 rounded-full">
+                    {stockDistributionBadge}
                   </span>
                 </div>
-              ))}
+                <div className="h-24 min-w-0 min-h-0">
+                  <ResponsiveContainer
+                    width="100%"
+                    height="100%"
+                    minWidth={1}
+                    minHeight={1}
+                  >
+                    <PieChart>
+                      <Pie
+                        data={stockDistribution}
+                        innerRadius={22}
+                        outerRadius={38}
+                        paddingAngle={4}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {stockDistribution.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number, _name, item) =>
+                          `${integerFormatter.format(value)} ${
+                            (item?.payload as { name?: string })?.name || ""
+                          }`
+                        }
+                        contentStyle={{
+                          borderRadius: "8px",
+                          border: "none",
+                          boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
+                          fontSize: "8px",
+                          color: "#fff",
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+              <div className="space-y-1.5 ml-2 pr-2">
+                {stockDistribution.map((item) => (
+                  <div key={item.name} className="flex items-center space-x-1.5">
+                    <div
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    ></div>
+                    <span className="text-[7px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tighter truncate w-16 leading-none">
+                      {item.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 px-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 px-1.5 items-start">
         {sections.map((section, idx) => (
           <CategorySection key={idx} {...section} />
         ))}
       </div>
-
-      {/* Quick Action Footer */}
-      <footer className="mt-10 pt-8 border-t border-slate-200 dark:border-slate-800">
-        <div className="bg-slate-900 dark:bg-slate-900/80 rounded-2xl p-6 md:p-8 text-white flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden border border-slate-800">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 blur-[60px] rounded-full translate-x-1/2 -translate-y-1/2" />
-
-          <div className="space-y-1.5 relative z-10 text-center md:text-left">
-            <div className="inline-block px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded text-[8px] font-black uppercase tracking-widest mb-2">
-              AI-Powered Insights
-            </div>
-            <h3 className="text-xl font-black tracking-tight">
-              Need a Custom Predictive Report?
-            </h3>
-            <p className="text-slate-400 text-xs max-w-md leading-relaxed">
-              Leverage our neural risk assessment engine to identify potential
-              supply chain bottlenecks before they impact production.
-            </p>
-          </div>
-
-          <button className="relative z-10 bg-white text-slate-900 hover:bg-slate-100 font-black px-8 py-3 rounded-xl shadow-xl transition-all hover:scale-105 active:scale-95 whitespace-nowrap text-xs uppercase tracking-wider">
-            Launch AI Intelligence
-          </button>
-        </div>
-      </footer>
     </div>
   );
 };

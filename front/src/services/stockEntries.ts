@@ -77,6 +77,13 @@ export const cancelStockEntry = async (stockEntryId: string | number) => {
   return res.data;
 };
 
+export const deleteStockEntry = async (stockEntryId: string | number) => {
+  const res = await api.delete(
+    `/api/inventory/stock-entries/${stockEntryId}/delete/`,
+  );
+  return res.data as { message?: string };
+};
+
 export const fetchStockEntryLogs = async (stockEntryId: string | number) => {
   const res = await api.get(
     `/api/inventory/stock-entries/${stockEntryId}/logs/`,

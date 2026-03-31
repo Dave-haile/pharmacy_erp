@@ -1,7 +1,6 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
-import { useTheme } from "../components/context/ThemeContext";
+import { ChevronLeft } from "lucide-react";
 
 const navItems = [
   {
@@ -15,16 +14,10 @@ const navItems = [
     icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4",
   },
   {
-    path: "/manufacturing",
-    label: "Manufacturing",
-    icon: "M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4",
+    path: "/users",
+    label: "User Management",
+    icon: "M17 20h5V4H2v16h5m10 0v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2m12 0H7m6-10a4 4 0 11-8 0 4 4 0 018 0z",
   },
-  {
-    path: "/quality",
-    label: "Quality Control",
-    icon: "M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z",
-  },
-
   {
     path: "/audit-logs",
     label: "Audit Logs",
@@ -51,12 +44,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   setIsMobileOpen,
 }) => {
   const location = useLocation();
-  const { theme, setTheme } = useTheme();
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const sidebarClasses = `
-    fixed left-0 top-0 h-screen bg-slate-900 flex flex-col shadow-2xl z-50 transition-all duration-300
+    fixed left-0 top-0 h-screen bg-white dark:bg-slate-900 flex flex-col border-r border-slate-200 dark:border-none shadow-xl z-50 transition-all duration-300
     ${isCollapsed ? "w-14" : "w-48"}
     ${isMobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
   `;
@@ -95,7 +86,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               </svg>
             </div>
             {!isCollapsed && (
-              <span className="text-base font-bold text-white tracking-tight whitespace-nowrap">
+              <span className="text-base font-bold text-slate-900 dark:text-white tracking-tight whitespace-nowrap">
                 PharmaFlow
               </span>
             )}
@@ -103,27 +94,18 @@ const Sidebar: React.FC<SidebarProps> = ({
 
           <button
             onClick={toggleCollapse}
-            className="hidden lg:flex p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="hidden lg:flex p-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-400 hover:text-white transition-colors"
           >
-            <svg
-              className={`w-5 h-5 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M11 19l-7-7m0 0l7-7m-7 7h18"
-              />
-            </svg>
+            <ChevronLeft className={`w-5 h-5 text-slate-400 dark:text-slate-600 transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`} />
           </button>
         </div>
 
         <nav className="flex-1 px-2.5 py-3 space-y-0.5 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive =
+              location.pathname === item.path ||
+              (item.path !== "/" &&
+                location.pathname.startsWith(`${item.path}/`));
             return (
               <Link
                 key={item.path}
@@ -137,11 +119,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 } ${
                   isActive
                     ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/20"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-white"
+                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <svg
-                  className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-slate-500 group-hover:text-slate-300"}`}
+                  className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300"}`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -168,8 +150,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         <div className="px-2.5 py-1.5">
-          <div
-            className={`bg-slate-800/50 rounded-lg p-0.5 flex items-center ${isCollapsed ? "flex-col space-y-0.5" : "space-x-0.5"}`}
+          {/* <div
+            className={`bg-slate-100 dark:bg-slate-800/50 rounded-lg p-0.5 flex items-center ${isCollapsed ? "flex-col space-y-0.5" : "space-x-0.5"}`}
           >
             <button
               onClick={() => setTheme("light")}
@@ -177,7 +159,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               className={`flex-1 flex items-center justify-center p-1 rounded-md transition-all ${
                 theme === "light"
                   ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
             >
               <svg
@@ -205,7 +187,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               className={`flex-1 flex items-center justify-center p-1 rounded-md transition-all ${
                 theme === "dark"
                   ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
             >
               <svg
@@ -233,7 +215,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               className={`flex-1 flex items-center justify-center p-1 rounded-md transition-all ${
                 theme === "system"
                   ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
               }`}
             >
               <svg
@@ -255,14 +237,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               )}
             </button>
-          </div>
+          </div> */}
         </div>
 
         <div
-          className={`p-2.5 border-t border-slate-800 ${isCollapsed ? "flex justify-center" : ""}`}
+          className={`p-2.5 border-t border-slate-200 dark:border-slate-800 ${isCollapsed ? "flex justify-center" : ""}`}
         >
           <div
-            className={`bg-slate-800 rounded-lg flex items-center transition-all ${isCollapsed ? "p-1" : "p-2.5 space-x-2"}`}
+            className={`bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center transition-all ${isCollapsed ? "p-1" : "p-2.5 space-x-2"}`}
           >
             <img
               src="https://picsum.photos/28/28"
@@ -271,24 +253,16 @@ const Sidebar: React.FC<SidebarProps> = ({
             />
             {!isCollapsed && (
               <div className="overflow-hidden">
-                <p className="text-[11px] font-semibold text-white truncate">
-                  {user?.email}
+                <p className="text-[11px] font-semibold text-slate-900 dark:text-white truncate">
+                  Dr. Aris Thorne
                 </p>
-                <p className="text-[9px] text-slate-400 truncate">
-                  {user?.role}
+                <p className="text-[9px] text-slate-500 dark:text-slate-400 truncate">
+                  QA Manager
                 </p>
               </div>
             )}
           </div>
-          {!isCollapsed && (
-            <button
-              type="button"
-              onClick={() => logout()}
-              className="mt-2 w-full hover:cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-2 rounded-lg transition-colors"
-            >
-              Log out
-            </button>
-          )}
+          
         </div>
       </div>
     </>

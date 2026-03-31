@@ -96,3 +96,10 @@ export const cancelSupplier = async (id: string | number) => {
   const res = await api.post(`/api/inventory/medicines/supplier/${id}/cancel/`);
   return res.data;
 };
+
+export const deleteSupplier = async (id: string | number) => {
+  const res = await api.delete(
+    `/api/inventory/medicines/supplier/${id}/delete/`,
+  );
+  return res.data as { message?: string };
+};

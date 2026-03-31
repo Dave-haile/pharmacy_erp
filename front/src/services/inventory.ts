@@ -1,7 +1,4 @@
-import {
-  BatchDetail,
-  InventoryOverviewResponse,
-} from "../types/types";
+import { BatchDetail, InventoryOverviewResponse } from "../types/types";
 import api from "./api";
 
 export const fetchInventoryOverview = async (filters?: {
@@ -9,6 +6,7 @@ export const fetchInventoryOverview = async (filters?: {
   medicine?: string;
   sku?: string;
   status?: string;
+  eligibleOnly?: boolean;
 }) => {
   const params = new URLSearchParams();
 
@@ -23,6 +21,9 @@ export const fetchInventoryOverview = async (filters?: {
   }
   if (filters?.status) {
     params.append("status", filters.status);
+  }
+  if (filters?.eligibleOnly) {
+    params.append("eligible_only", "true");
   }
 
   const suffix = params.toString() ? `?${params.toString()}` : "";

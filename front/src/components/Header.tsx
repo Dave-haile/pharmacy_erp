@@ -6,6 +6,7 @@ import {
   Menu,
   Monitor,
   Moon,
+  RefreshCw,
   Search,
   Settings,
   Sun,
@@ -18,6 +19,7 @@ import {
   type GlobalSearchGroup,
   type GlobalSearchItem,
 } from "../services/globalSearch";
+import { clearApplicationCache, clearFrontendCaches } from "../services/cache";
 import { useTheme } from "./context/ThemeContext";
 
 interface HeaderProps {
@@ -99,6 +101,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const [searchGroups, setSearchGroups] = useState<GlobalSearchGroup[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [isReloading, setIsReloading] = useState(false);
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -226,6 +229,28 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
 
   const handleResultSelect = (item: GlobalSearchItem) => {
     handleNavigate(item.href, item.title);
+  };
+
+  const handleHardReload = async () => {
+    if (isReloading) {
+      return;
+    }
+
+    setIsReloading(true);
+
+    try {
+      await clearApplicationCache();
+    } catch (error) {
+      console.error("Failed to clear backend cache", error);
+    }
+
+    try {
+      await clearFrontendCaches();
+    } catch (error) {
+      console.error("Failed to clear frontend cache", error);
+    }
+
+    window.location.reload();
   };
 
   const showDiscoveryState = searchQuery.trim().length < 2;
@@ -455,6 +480,18 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                 <button className="w-full flex items-center space-x-2.5 px-3 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-xs font-bold">
                   <Settings className="w-4 h-4" />
                   <span>System Preferences</span>
+                </button>
+                <button
+                  onClick={() => void handleHardReload()}
+                  disabled={isReloading}
+                  className="w-full flex items-center space-x-2.5 px-3 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors text-xs font-bold disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 ${isReloading ? "animate-spin" : ""}`}
+                  />
+                  <span>
+                    {isReloading ? "Clearing Cache..." : "Hard Reload"}
+                  </span>
                 </button>
               </div>
 

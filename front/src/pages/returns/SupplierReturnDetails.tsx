@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import SearchableSelect from "../../components/SearchableSelect";
 import DocumentActivityLog from "../../components/common/DocumentActivityLog";
 import {
@@ -46,14 +51,17 @@ const SupplierReturnDetails: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { id } = useParams<{ id: string }>();
-  const routeState = (location.state as { returnId?: string | number } | null) || null;
+  const routeState =
+    (location.state as { returnId?: string | number } | null) || null;
   const routeId = routeState?.returnId ?? searchParams.get("id") ?? id;
   const isNew = id === "new";
 
   const { showError, showSuccess } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [inventoryItems, setInventoryItems] = useState<InventoryBatchItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryBatchItem[]>(
+    [],
+  );
   const [logs, setLogs] = useState<Log[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(!isNew);
@@ -77,7 +85,7 @@ const SupplierReturnDetails: React.FC = () => {
   useEffect(() => {
     const loadInventory = async () => {
       try {
-        const response = await fetchInventoryOverview();
+        const response = await fetchInventoryOverview({ eligibleOnly: true });
         setInventoryItems(response.items);
       } catch (error: unknown) {
         showError(GetErrorMessage(error, "inventory", "load"));
@@ -152,18 +160,23 @@ const SupplierReturnDetails: React.FC = () => {
   }, [inventoryItems]);
 
   const batchesByMedicine = useMemo(() => {
-    return inventoryItems.reduce<Record<number, InventoryBatchItem[]>>((acc, item) => {
-      if (!acc[item.medicine_id]) acc[item.medicine_id] = [];
-      acc[item.medicine_id].push(item);
-      return acc;
-    }, {});
+    return inventoryItems.reduce<Record<number, InventoryBatchItem[]>>(
+      (acc, item) => {
+        if (!acc[item.medicine_id]) acc[item.medicine_id] = [];
+        acc[item.medicine_id].push(item);
+        return acc;
+      },
+      {},
+    );
   }, [inventoryItems]);
 
   const canEditForm = isNew || isEditing;
   const canEditDraft = !isNew && !!docId && statusKey === "draft" && !isEditing;
-  const canAmendCancelled = !isNew && !!docId && statusKey === "cancelled" && !isEditing;
+  const canAmendCancelled =
+    !isNew && !!docId && statusKey === "cancelled" && !isEditing;
   const canPostDraft = !isNew && !!docId && statusKey === "draft" && !isEditing;
-  const canCancelPosted = !isNew && !!docId && statusKey === "posted" && !isEditing;
+  const canCancelPosted =
+    !isNew && !!docId && statusKey === "posted" && !isEditing;
 
   const setItemField = (
     index: number,
@@ -218,7 +231,9 @@ const SupplierReturnDetails: React.FC = () => {
         const response = await createSupplierReturn(formData);
         showSuccess(response.message || "Supplier return draft created.");
         const created = response.supplier_return;
-        navigate(`/inventory/supplier-returns/${created.id}`, { state: { returnId: created.id } });
+        navigate(`/inventory/supplier-returns/${created.id}`, {
+          state: { returnId: created.id },
+        });
         return;
       }
       if (docId) {
@@ -289,12 +304,20 @@ const SupplierReturnDetails: React.FC = () => {
         actions={
           <>
             {canEditDraft && (
-              <button type="button" onClick={() => setIsEditing(true)} className={documentSecondaryButtonClassName}>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={documentSecondaryButtonClassName}
+              >
                 Edit
               </button>
             )}
             {canAmendCancelled && (
-              <button type="button" onClick={() => setIsEditing(true)} className={documentSecondaryButtonClassName}>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={documentSecondaryButtonClassName}
+              >
                 Amend
               </button>
             )}
@@ -319,7 +342,12 @@ const SupplierReturnDetails: React.FC = () => {
               </button>
             )}
             {canEditForm && (
-              <button type="submit" form="supplier-return-form" disabled={isSaving || isPosting || isCancelling} className={documentPrimaryButtonClassName}>
+              <button
+                type="submit"
+                form="supplier-return-form"
+                disabled={isSaving || isPosting || isCancelling}
+                className={documentPrimaryButtonClassName}
+              >
                 {isSaving ? "Saving..." : isNew ? "Save Draft" : "Save"}
               </button>
             )}
@@ -328,10 +356,22 @@ const SupplierReturnDetails: React.FC = () => {
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <DocumentSummaryCard label="Status" value={isNew ? "New Draft" : statusKey || "draft"} />
-        <DocumentSummaryCard label="Lines" value={String(formData.items.length)} />
-        <DocumentSummaryCard label="Supplier" value={supplierInputSearch || "—"} />
-        <DocumentSummaryCard label="Reference" value={formData.reference_document || "—"} />
+        <DocumentSummaryCard
+          label="Status"
+          value={isNew ? "New Draft" : statusKey || "draft"}
+        />
+        <DocumentSummaryCard
+          label="Lines"
+          value={String(formData.items.length)}
+        />
+        <DocumentSummaryCard
+          label="Supplier"
+          value={supplierInputSearch || "—"}
+        />
+        <DocumentSummaryCard
+          label="Reference"
+          value={formData.reference_document || "—"}
+        />
       </section>
 
       {isLoading && (
@@ -340,16 +380,33 @@ const SupplierReturnDetails: React.FC = () => {
         </div>
       )}
 
-      <form id="supplier-return-form" onSubmit={handleSave} className="space-y-6">
-        <DocumentCard title="Return Details" description="Select supplier and add notes." accent="blue">
+      <form
+        id="supplier-return-form"
+        onSubmit={handleSave}
+        className="space-y-6"
+      >
+        <DocumentCard
+          title="Return Details"
+          description="Select supplier and add notes."
+          accent="blue"
+        >
           <div className="grid gap-5 md:grid-cols-2">
             <DocumentField label="Supplier">
               <SearchableSelect
                 options={supplierGroups}
-                value={formData.supplier_id != null ? String(formData.supplier_id) : ""}
+                value={
+                  formData.supplier_id != null
+                    ? String(formData.supplier_id)
+                    : ""
+                }
                 onChange={(value) => {
-                  const selected = supplierGroups.find((s) => s.value === value);
-                  setFormData((p) => ({ ...p, supplier_id: value ? Number(value) : null }));
+                  const selected = supplierGroups.find(
+                    (s) => s.value === value,
+                  );
+                  setFormData((p) => ({
+                    ...p,
+                    supplier_id: value ? Number(value) : null,
+                  }));
                   setSupplierInputSearch(selected?.label || "");
                 }}
                 placeholder="Search supplier..."
@@ -360,7 +417,12 @@ const SupplierReturnDetails: React.FC = () => {
             <DocumentField label="Reference (optional)">
               <input
                 value={formData.reference_document}
-                onChange={(e) => setFormData((p) => ({ ...p, reference_document: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((p) => ({
+                    ...p,
+                    reference_document: e.target.value,
+                  }))
+                }
                 className={documentInputClassName}
                 disabled={!canEditForm}
               />
@@ -369,7 +431,9 @@ const SupplierReturnDetails: React.FC = () => {
               <textarea
                 rows={4}
                 value={formData.notes}
-                onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, notes: e.target.value }))
+                }
                 className={documentTextareaClassName}
                 disabled={!canEditForm}
               />
@@ -383,7 +447,16 @@ const SupplierReturnDetails: React.FC = () => {
           accent="amber"
           action={
             canEditForm ? (
-              <button type="button" onClick={() => setFormData((p) => ({ ...p, items: [...p.items, emptyItem()] }))} className={documentSecondaryButtonClassName}>
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData((p) => ({
+                    ...p,
+                    items: [...p.items, emptyItem()],
+                  }))
+                }
+                className={documentSecondaryButtonClassName}
+              >
                 Add Line
               </button>
             ) : undefined
@@ -391,15 +464,31 @@ const SupplierReturnDetails: React.FC = () => {
           contentClassName="space-y-4"
         >
           {formData.items.map((item, index) => {
-            const availableBatches = item.medicine_id ? (batchesByMedicine[item.medicine_id] ?? []) : [];
+            const availableBatches = item.medicine_id
+              ? (batchesByMedicine[item.medicine_id] ?? [])
+              : [];
             return (
-              <div key={`${index}-${item.medicine_id ?? "new"}`} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+              <div
+                key={`${index}-${item.medicine_id ?? "new"}`}
+                className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800"
+              >
                 <div className="grid gap-4 md:grid-cols-4">
                   <DocumentField label={`Medicine ${index + 1}`}>
                     <SearchableSelect
-                      options={medicineOptions.map((opt) => ({ value: String(opt.medicine_id), label: opt.medicine_name }))}
-                      value={item.medicine_id != null ? String(item.medicine_id) : ""}
-                      onChange={(value) => setItemField(index, "medicine_id", value ? Number(value) : null)}
+                      options={medicineOptions.map((opt) => ({
+                        value: String(opt.medicine_id),
+                        label: opt.medicine_name,
+                      }))}
+                      value={
+                        item.medicine_id != null ? String(item.medicine_id) : ""
+                      }
+                      onChange={(value) =>
+                        setItemField(
+                          index,
+                          "medicine_id",
+                          value ? Number(value) : null,
+                        )
+                      }
                       placeholder="Search medicine..."
                       disabled={!canEditForm}
                     />
@@ -407,7 +496,13 @@ const SupplierReturnDetails: React.FC = () => {
                   <DocumentField label="Batch">
                     <select
                       value={item.batch_id ?? ""}
-                      onChange={(e) => setItemField(index, "batch_id", e.target.value ? Number(e.target.value) : null)}
+                      onChange={(e) =>
+                        setItemField(
+                          index,
+                          "batch_id",
+                          e.target.value ? Number(e.target.value) : null,
+                        )
+                      }
                       className={documentInputClassName}
                       disabled={!canEditForm}
                     >
@@ -422,7 +517,9 @@ const SupplierReturnDetails: React.FC = () => {
                   <DocumentField label="Quantity">
                     <input
                       value={item.quantity}
-                      onChange={(e) => setItemField(index, "quantity", e.target.value)}
+                      onChange={(e) =>
+                        setItemField(index, "quantity", e.target.value)
+                      }
                       className={documentInputClassName}
                       disabled={!canEditForm}
                     />
@@ -430,14 +527,25 @@ const SupplierReturnDetails: React.FC = () => {
                   <DocumentField label="Unit Price">
                     <input
                       value={item.unit_price}
-                      onChange={(e) => setItemField(index, "unit_price", e.target.value)}
+                      onChange={(e) =>
+                        setItemField(index, "unit_price", e.target.value)
+                      }
                       className={documentInputClassName}
                       disabled={!canEditForm}
                     />
                   </DocumentField>
                 </div>
                 {canEditForm && formData.items.length > 1 && (
-                  <button type="button" onClick={() => setFormData((p) => ({ ...p, items: p.items.filter((_, i) => i !== index) }))} className="mt-3 text-sm font-semibold text-red-600">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((p) => ({
+                        ...p,
+                        items: p.items.filter((_, i) => i !== index),
+                      }))
+                    }
+                    className="mt-3 text-sm font-semibold text-red-600"
+                  >
                     Remove Line
                   </button>
                 )}
@@ -461,4 +569,3 @@ const SupplierReturnDetails: React.FC = () => {
 };
 
 export default SupplierReturnDetails;
-

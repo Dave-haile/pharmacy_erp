@@ -37,6 +37,9 @@ import PurchasesRegistry from "@/src/pages/purchasing/PurchasesRegistry";
 import PurchaseDetails from "@/src/pages/purchasing/PurchaseDetails";
 import GrnRegistry from "@/src/pages/purchasing/GrnRegistry";
 import GrnDetails from "@/src/pages/purchasing/GrnDetails";
+import UserRegistry from "@/src/pages/users/UserRegistry";
+import UserCreate from "@/src/pages/users/UserCreate";
+import UserDetailsByEmail from "@/src/pages/users/UserDetailsByEmail";
 interface RouteConfig {
   key: string;
   name: string;
@@ -101,7 +104,7 @@ const routes: RouteConfig[] = [
   {
     key: "report-near-expiry",
     name: "Near Expiry Report",
-    path: "/inventory/reports/near-expiry",
+    path: "/inventory/near-expiry",
     element: (
       <RouteGuard>
         <NearExpiryReport />
@@ -111,7 +114,7 @@ const routes: RouteConfig[] = [
   {
     key: "report-valuation",
     name: "Valuation Report",
-    path: "/inventory/reports/valuation",
+    path: "/inventory/valuation",
     element: (
       <RouteGuard>
         <ValuationReport />
@@ -121,7 +124,7 @@ const routes: RouteConfig[] = [
   {
     key: "report-sales-summary",
     name: "Sales Summary",
-    path: "/inventory/reports/sales-summary",
+    path: "/inventory/sales-summary",
     element: (
       <RouteGuard>
         <SalesSummaryReport />
@@ -427,6 +430,37 @@ const routes: RouteConfig[] = [
         <AuditLogs />
       </RouteGuard>
     ),
+  },
+  {
+    key: "users",
+    name: "User Registry",
+    path: "/users",
+    element: (
+      <RouteGuard>
+        <UserRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "create-user",
+    name: "Create User",
+    path: "/users/new",
+    element: (
+      <RouteGuard>
+        <UserCreate />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "user-details",
+    name: "User Details",
+    path: "/users/:email",
+    element: (
+      <RouteGuard>
+        <UserDetailsByEmail />
+      </RouteGuard>
+    ),
+    visible: false,
   },
   {
     key: "not-found",

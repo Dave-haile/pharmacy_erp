@@ -17,12 +17,14 @@ import { GetErrorMessage } from "../../components/ShowErrorToast";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { useToast } from "../../hooks/useToast";
 import {
+  deleteCategory,
   fetchCategoryByNamingSeries,
   fetchCategoryLogs,
   updateCategory,
 } from "../../services/categories";
 import { useCategories } from "../../services/common";
 import { Category, CreateCategory, Log } from "../../types/types";
+import StockEntryActionsMenu from "../stock-entries/StockEntryActionsMenu";
 
 const CategoryDetails: React.FC = () => {
   const { naming_series } = useParams<{ naming_series: string }>();
@@ -37,6 +39,8 @@ const CategoryDetails: React.FC = () => {
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const { itemGroups } = useCategories(parentSearch);
 
   useEffect(() => {
@@ -141,6 +145,80 @@ const CategoryDetails: React.FC = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!category?.id) return;
+
+    const result = await confirm({
+      title: "Delete Category",
+      message:
+        "This will permanently delete this category. You cannot undo this action.",
+      confirmLabel: "Delete Category",
+      cancelLabel: "Back",
+      variant: "danger",
+    });
+
+    if (!result.confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await deleteCategory(category.id);
+      showSuccess(response.message || "Category deleted successfully.");
+      navigate("/inventory/categories");
+    } catch (error: unknown) {
+      const errorResponse =
+        error &&
+        typeof error === "object" &&
+        "response" in error &&
+        error.response &&
+        typeof error.response === "object" &&
+        "data" in error.response
+          ? (
+              error.response as {
+                data?: {
+                  error?: string;
+                  linked_medicine?: {
+                    id?: number;
+                    name?: string;
+                    naming_series?: string | null;
+                  };
+                };
+              }
+            ).data
+          : undefined;
+      const linkedMedicine = errorResponse?.linked_medicine;
+
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Delete Category",
+        message:
+          errorResponse?.error || GetErrorMessage(error, "category", "delete"),
+        content: linkedMedicine?.naming_series ? (
+          <a
+            href={`/inventory/medicines/${linkedMedicine.naming_series}`}
+            className="inline-flex text-xs font-black uppercase tracking-[0.2em] text-emerald-400 hover:text-emerald-300 hover:underline"
+          >
+            Open linked medicine:{" "}
+            {linkedMedicine.name || linkedMedicine.naming_series}
+          </a>
+        ) : null,
+        confirmLabel: "OK",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEdit = () => {
+    setEditForm({
+      name: category.name || "",
+      category_name: category.category_name || "",
+      description: category.description || "",
+      parent_category_id: category.parent_category_id ?? null,
+    });
+    setIsEditing(true);
+  };
+
   if (isLoading) {
     return (
       <div className="p-12 text-center">
@@ -196,21 +274,25 @@ const CategoryDetails: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-3">
           {!isEditing ? (
-            <button
-              onClick={() => {
-                setEditForm({
-                  name: category.name || "",
-                  category_name: category.category_name || "",
-                  description: category.description || "",
-                  parent_category_id: category.parent_category_id ?? null,
-                });
-                setIsEditing(true);
-              }}
-              className="flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
-            >
-              <Edit2 className="h-4 w-4" />
-              Edit
-            </button>
+            <>
+              <button
+                onClick={handleEdit}
+                className="flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-xl transition-all hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+              >
+                <Edit2 className="h-4 w-4" />
+                Edit
+              </button>
+              <StockEntryActionsMenu
+                isOpen={isActionsOpen}
+                onToggle={() => setIsActionsOpen((prev) => !prev)}
+                onClose={() => setIsActionsOpen(false)}
+                onDelete={() => {
+                  void handleDelete();
+                  setIsActionsOpen(false);
+                }}
+                deleteLabel={isDeleting ? "Deleting..." : "Delete Category"}
+              />
+            </>
           ) : (
             <>
               <button

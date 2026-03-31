@@ -50,6 +50,11 @@ export const cancelStockOut = async (saleId: string | number) => {
   return res.data;
 };
 
+export const deleteStockOut = async (saleId: string | number) => {
+  const res = await api.delete(`/api/inventory/stock-outs/${saleId}/delete/`);
+  return res.data as { message?: string };
+};
+
 export const fetchStockOutBatchOptions = async (medicineId?: number | null) => {
   const params = new URLSearchParams();
   if (medicineId) {

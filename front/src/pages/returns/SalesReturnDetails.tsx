@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import SearchableSelect from "../../components/SearchableSelect";
 import DocumentActivityLog from "../../components/common/DocumentActivityLog";
 import {
@@ -45,14 +50,17 @@ const SalesReturnDetails: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { id } = useParams<{ id: string }>();
-  const routeState = (location.state as { returnId?: string | number } | null) || null;
+  const routeState =
+    (location.state as { returnId?: string | number } | null) || null;
   const routeId = routeState?.returnId ?? searchParams.get("id") ?? id;
   const isNew = id === "new";
 
   const { showError, showSuccess } = useToast();
   const { confirm } = useConfirmDialog();
 
-  const [inventoryItems, setInventoryItems] = useState<InventoryBatchItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryBatchItem[]>(
+    [],
+  );
   const [logs, setLogs] = useState<Log[]>([]);
   const [isLogsLoading, setIsLogsLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(!isNew);
@@ -73,7 +81,7 @@ const SalesReturnDetails: React.FC = () => {
   useEffect(() => {
     const loadInventory = async () => {
       try {
-        const response = await fetchInventoryOverview();
+        const response = await fetchInventoryOverview({ eligibleOnly: true });
         setInventoryItems(response.items.filter((i) => !i.is_expired));
       } catch (error: unknown) {
         showError(GetErrorMessage(error, "inventory", "load"));
@@ -147,18 +155,23 @@ const SalesReturnDetails: React.FC = () => {
   }, [inventoryItems]);
 
   const batchesByMedicine = useMemo(() => {
-    return inventoryItems.reduce<Record<number, InventoryBatchItem[]>>((acc, item) => {
-      if (!acc[item.medicine_id]) acc[item.medicine_id] = [];
-      acc[item.medicine_id].push(item);
-      return acc;
-    }, {});
+    return inventoryItems.reduce<Record<number, InventoryBatchItem[]>>(
+      (acc, item) => {
+        if (!acc[item.medicine_id]) acc[item.medicine_id] = [];
+        acc[item.medicine_id].push(item);
+        return acc;
+      },
+      {},
+    );
   }, [inventoryItems]);
 
   const canEditForm = isNew || isEditing;
   const canEditDraft = !isNew && !!docId && statusKey === "draft" && !isEditing;
-  const canAmendCancelled = !isNew && !!docId && statusKey === "cancelled" && !isEditing;
+  const canAmendCancelled =
+    !isNew && !!docId && statusKey === "cancelled" && !isEditing;
   const canPostDraft = !isNew && !!docId && statusKey === "draft" && !isEditing;
-  const canCancelPosted = !isNew && !!docId && statusKey === "posted" && !isEditing;
+  const canCancelPosted =
+    !isNew && !!docId && statusKey === "posted" && !isEditing;
 
   const setItemField = (
     index: number,
@@ -172,7 +185,9 @@ const SalesReturnDetails: React.FC = () => {
         const next = { ...item, [field]: value } as SalesReturnItemInput;
         if (field === "medicine_id") {
           next.batch_id = null;
-          const selected = medicineOptions.find((o) => o.medicine_id === Number(value));
+          const selected = medicineOptions.find(
+            (o) => o.medicine_id === Number(value),
+          );
           next.unit_price = selected?.selling_price ?? "";
         }
         return next;
@@ -214,7 +229,9 @@ const SalesReturnDetails: React.FC = () => {
         const response = await createSalesReturn(formData);
         showSuccess(response.message || "Return draft created.");
         const created = response.sales_return;
-        navigate(`/inventory/sales-returns/${created.id}`, { state: { returnId: created.id } });
+        navigate(`/inventory/sales-returns/${created.id}`, {
+          state: { returnId: created.id },
+        });
         return;
       }
       if (docId) {
@@ -285,12 +302,20 @@ const SalesReturnDetails: React.FC = () => {
         actions={
           <>
             {canEditDraft && (
-              <button type="button" onClick={() => setIsEditing(true)} className={documentSecondaryButtonClassName}>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={documentSecondaryButtonClassName}
+              >
                 Edit
               </button>
             )}
             {canAmendCancelled && (
-              <button type="button" onClick={() => setIsEditing(true)} className={documentSecondaryButtonClassName}>
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className={documentSecondaryButtonClassName}
+              >
                 Amend
               </button>
             )}
@@ -315,7 +340,12 @@ const SalesReturnDetails: React.FC = () => {
               </button>
             )}
             {canEditForm && (
-              <button type="submit" form="sales-return-form" disabled={isSaving || isPosting || isCancelling} className={documentPrimaryButtonClassName}>
+              <button
+                type="submit"
+                form="sales-return-form"
+                disabled={isSaving || isPosting || isCancelling}
+                className={documentPrimaryButtonClassName}
+              >
                 {isSaving ? "Saving..." : isNew ? "Save Draft" : "Save"}
               </button>
             )}
@@ -324,10 +354,22 @@ const SalesReturnDetails: React.FC = () => {
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <DocumentSummaryCard label="Status" value={isNew ? "New Draft" : statusKey || "draft"} />
-        <DocumentSummaryCard label="Lines" value={String(formData.items.length)} />
-        <DocumentSummaryCard label="Customer" value={formData.customer_name || "Walk-in"} />
-        <DocumentSummaryCard label="Reference" value={formData.reference_invoice || "—"} />
+        <DocumentSummaryCard
+          label="Status"
+          value={isNew ? "New Draft" : statusKey || "draft"}
+        />
+        <DocumentSummaryCard
+          label="Lines"
+          value={String(formData.items.length)}
+        />
+        <DocumentSummaryCard
+          label="Customer"
+          value={formData.customer_name || "Walk-in"}
+        />
+        <DocumentSummaryCard
+          label="Reference"
+          value={formData.reference_invoice || "—"}
+        />
       </section>
 
       {isLoading && (
@@ -337,12 +379,21 @@ const SalesReturnDetails: React.FC = () => {
       )}
 
       <form id="sales-return-form" onSubmit={handleSave} className="space-y-6">
-        <DocumentCard title="Return Details" description="Capture reference and customer context." accent="blue">
+        <DocumentCard
+          title="Return Details"
+          description="Capture reference and customer context."
+          accent="blue"
+        >
           <div className="grid gap-5 md:grid-cols-2">
             <DocumentField label="Reference Invoice (optional)">
               <input
                 value={formData.reference_invoice}
-                onChange={(e) => setFormData((p) => ({ ...p, reference_invoice: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((p) => ({
+                    ...p,
+                    reference_invoice: e.target.value,
+                  }))
+                }
                 className={documentInputClassName}
                 disabled={!canEditForm}
               />
@@ -350,7 +401,9 @@ const SalesReturnDetails: React.FC = () => {
             <DocumentField label="Customer Name (optional)">
               <input
                 value={formData.customer_name}
-                onChange={(e) => setFormData((p) => ({ ...p, customer_name: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, customer_name: e.target.value }))
+                }
                 className={documentInputClassName}
                 disabled={!canEditForm}
               />
@@ -359,7 +412,9 @@ const SalesReturnDetails: React.FC = () => {
               <textarea
                 rows={4}
                 value={formData.notes}
-                onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((p) => ({ ...p, notes: e.target.value }))
+                }
                 className={documentTextareaClassName}
                 disabled={!canEditForm}
               />
@@ -373,7 +428,16 @@ const SalesReturnDetails: React.FC = () => {
           accent="amber"
           action={
             canEditForm ? (
-              <button type="button" onClick={() => setFormData((p) => ({ ...p, items: [...p.items, emptyItem()] }))} className={documentSecondaryButtonClassName}>
+              <button
+                type="button"
+                onClick={() =>
+                  setFormData((p) => ({
+                    ...p,
+                    items: [...p.items, emptyItem()],
+                  }))
+                }
+                className={documentSecondaryButtonClassName}
+              >
                 Add Line
               </button>
             ) : undefined
@@ -381,15 +445,31 @@ const SalesReturnDetails: React.FC = () => {
           contentClassName="space-y-4"
         >
           {formData.items.map((item, index) => {
-            const availableBatches = item.medicine_id ? (batchesByMedicine[item.medicine_id] ?? []) : [];
+            const availableBatches = item.medicine_id
+              ? (batchesByMedicine[item.medicine_id] ?? [])
+              : [];
             return (
-              <div key={`${index}-${item.medicine_id ?? "new"}`} className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+              <div
+                key={`${index}-${item.medicine_id ?? "new"}`}
+                className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800"
+              >
                 <div className="grid gap-4 md:grid-cols-4">
                   <DocumentField label={`Medicine ${index + 1}`}>
                     <SearchableSelect
-                      options={medicineOptions.map((opt) => ({ value: String(opt.medicine_id), label: opt.medicine_name }))}
-                      value={item.medicine_id != null ? String(item.medicine_id) : ""}
-                      onChange={(value) => setItemField(index, "medicine_id", value ? Number(value) : null)}
+                      options={medicineOptions.map((opt) => ({
+                        value: String(opt.medicine_id),
+                        label: opt.medicine_name,
+                      }))}
+                      value={
+                        item.medicine_id != null ? String(item.medicine_id) : ""
+                      }
+                      onChange={(value) =>
+                        setItemField(
+                          index,
+                          "medicine_id",
+                          value ? Number(value) : null,
+                        )
+                      }
                       placeholder="Search medicine..."
                       disabled={!canEditForm}
                     />
@@ -397,14 +477,21 @@ const SalesReturnDetails: React.FC = () => {
                   <DocumentField label="Batch">
                     <select
                       value={item.batch_id ?? ""}
-                      onChange={(e) => setItemField(index, "batch_id", e.target.value ? Number(e.target.value) : null)}
+                      onChange={(e) =>
+                        setItemField(
+                          index,
+                          "batch_id",
+                          e.target.value ? Number(e.target.value) : null,
+                        )
+                      }
                       className={documentInputClassName}
                       disabled={!canEditForm}
                     >
                       <option value="">Select batch</option>
                       {availableBatches.map((b) => (
                         <option key={b.batch_id} value={b.batch_id}>
-                          {b.batch_number} (qty {b.quantity}, exp {b.expiry_date})
+                          {b.batch_number} (qty {b.quantity}, exp{" "}
+                          {b.expiry_date})
                         </option>
                       ))}
                     </select>
@@ -412,7 +499,9 @@ const SalesReturnDetails: React.FC = () => {
                   <DocumentField label="Quantity">
                     <input
                       value={item.quantity}
-                      onChange={(e) => setItemField(index, "quantity", e.target.value)}
+                      onChange={(e) =>
+                        setItemField(index, "quantity", e.target.value)
+                      }
                       className={documentInputClassName}
                       disabled={!canEditForm}
                     />
@@ -420,14 +509,25 @@ const SalesReturnDetails: React.FC = () => {
                   <DocumentField label="Unit Price">
                     <input
                       value={item.unit_price}
-                      onChange={(e) => setItemField(index, "unit_price", e.target.value)}
+                      onChange={(e) =>
+                        setItemField(index, "unit_price", e.target.value)
+                      }
                       className={documentInputClassName}
                       disabled={!canEditForm}
                     />
                   </DocumentField>
                 </div>
                 {canEditForm && formData.items.length > 1 && (
-                  <button type="button" onClick={() => setFormData((p) => ({ ...p, items: p.items.filter((_, i) => i !== index) }))} className="mt-3 text-sm font-semibold text-red-600">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((p) => ({
+                        ...p,
+                        items: p.items.filter((_, i) => i !== index),
+                      }))
+                    }
+                    className="mt-3 text-sm font-semibold text-red-600"
+                  >
                     Remove Line
                   </button>
                 )}
@@ -451,4 +551,3 @@ const SalesReturnDetails: React.FC = () => {
 };
 
 export default SalesReturnDetails;
-

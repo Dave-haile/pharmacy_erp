@@ -26,7 +26,6 @@ export const loadCategories = async (
   }
 };
 
-
 export const useCategories = (categoryInputSearch: string) => {
   const { data: categoriesData } = useQuery({
     queryKey: ["categories", categoryInputSearch],
@@ -35,11 +34,13 @@ export const useCategories = (categoryInputSearch: string) => {
   });
 
   const itemGroups = React.useMemo(() => {
-    return categoriesData?.results?.map((category: Category) => ({
-      value: String(category.id),
-      label: category.name,
-      subtitle: category.description,
-    })) || [];
+    return (
+      categoriesData?.results?.map((category: Category) => ({
+        value: String(category.id),
+        label: category.name,
+        subtitle: category.description,
+      })) || []
+    );
   }, [categoriesData?.results]);
   return { itemGroups, categoriesData };
 };
@@ -66,19 +67,33 @@ export const loadSuppliers = async (
   }
 };
 
-export const useSuppliers = (supplierInputSearch: string) => {
+export const useSuppliers = (
+  supplierInputSearch: string,
+  filters?: { status?: string; is_active?: string },
+) => {
   const { data: suppliersData } = useQuery({
-    queryKey: ["suppliers", supplierInputSearch],
-    queryFn: () => fetchSuppliers(1, 5, supplierInputSearch),
+    queryKey: [
+      "suppliers",
+      supplierInputSearch,
+      filters?.status,
+      filters?.is_active,
+    ],
+    queryFn: () =>
+      fetchSuppliers(1, 5, {
+        search: supplierInputSearch,
+        ...(filters || {}),
+      }),
     staleTime: 60 * 1000,
   });
 
   const supplierGroups = React.useMemo(() => {
-    return suppliersData?.results?.map((supplier: Supplier) => ({
-      value: String(supplier.id),
-      label: supplier.name,
-      subtitle: `${supplier.phone} - ${supplier.email} - ${supplier.address}`,
-    })) || [];
+    return (
+      suppliersData?.results?.map((supplier: Supplier) => ({
+        value: String(supplier.id),
+        label: supplier.name,
+        subtitle: `${supplier.phone} - ${supplier.email} - ${supplier.address}`,
+      })) || []
+    );
   }, [suppliersData?.results]);
   return { supplierGroups, suppliersData };
 };

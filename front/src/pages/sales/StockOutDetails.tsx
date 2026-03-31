@@ -26,12 +26,14 @@ import { fetchInventoryOverview } from "../../services/inventory";
 import {
   cancelStockOut,
   createStockOut,
+  deleteStockOut,
   fetchStockOutById,
   fetchStockOutByPostingNumber,
   fetchStockOutLogs,
   submitStockOut,
   updateStockOut,
 } from "../../services/stockOuts";
+import StockEntryActionsMenu from "../stock-entries/StockEntryActionsMenu";
 import {
   CreateStockOut,
   InventoryBatchItem,
@@ -51,10 +53,10 @@ const emptyItem = (): StockOutItemInput => ({
 const formatDate = (value?: string | null) =>
   value
     ? new Date(value).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
     : "-";
 
 const StockOutDetails: React.FC = () => {
@@ -78,6 +80,8 @@ const StockOutDetails: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(isNewEntry);
   const [saleId, setSaleId] = useState<string | number | null>(null);
   const [currentStatusKey, setCurrentStatusKey] = useState<string | null>(null);
@@ -92,7 +96,7 @@ const StockOutDetails: React.FC = () => {
   useEffect(() => {
     const loadInventory = async () => {
       try {
-        const response = await fetchInventoryOverview();
+        const response = await fetchInventoryOverview({ eligibleOnly: true });
         setInventoryItems(response.items.filter((item) => !item.is_expired));
       } catch (error: unknown) {
         showError(GetErrorMessage(error, "inventory", "load"));
@@ -356,6 +360,50 @@ const StockOutDetails: React.FC = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!saleId || isNewEntry) return;
+
+    if (currentStatusKey === "posted") {
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Delete Stock Out",
+        message:
+          "This stock-out is posted. Cancel the document before deleting it.",
+        confirmLabel: "OK",
+      });
+      return;
+    }
+
+    const { confirmed } = await confirm({
+      title: "Delete Stock Out",
+      message:
+        "This will permanently delete this stock-out document. You cannot undo this action.",
+      confirmLabel: "Delete Stock Out",
+      cancelLabel: "Back",
+      variant: "danger",
+    });
+
+    if (!confirmed) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await deleteStockOut(saleId);
+      showSuccess(response.message || "Stock-out deleted successfully.");
+      navigate("/inventory/stock-outs");
+    } catch (error: unknown) {
+      await confirm({
+        mode: "alert",
+        variant: "danger",
+        title: "Cannot Delete Stock Out",
+        message: GetErrorMessage(error, "stock-out", "delete"),
+        confirmLabel: "OK",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <DocumentPage>
       <DocumentHeader
@@ -441,6 +489,24 @@ const StockOutDetails: React.FC = () => {
               >
                 {isSaving ? "Saving..." : isNewEntry ? "Save Draft" : "Save"}
               </button>
+            )}
+            {!isNewEntry && (
+              <StockEntryActionsMenu
+                isOpen={isActionsOpen}
+                onToggle={() => setIsActionsOpen((prev) => !prev)}
+                onClose={() => setIsActionsOpen(false)}
+                onPrint={() => {
+                  window.print();
+                  setIsActionsOpen(false);
+                }}
+                onDelete={() => {
+                  void handleDelete();
+                  setIsActionsOpen(false);
+                }}
+                deleteLabel={
+                  isDeleting ? "Deleting Stock Out..." : "Delete Stock Out"
+                }
+              />
             )}
           </>
         }
@@ -619,7 +685,9 @@ const StockOutDetails: React.FC = () => {
                       placeholder="Search medicine..."
                       triggerClassName={documentSelectTriggerClassName}
                       disabled={!canEditForm}
-                      onCreateNew={() => navigate("/inventory/medicines/new-medicine")}
+                      onCreateNew={() =>
+                        navigate("/inventory/medicines/new-medicine")
+                      }
                       createNewText="Add New Medicine"
                     />
                   </DocumentField>

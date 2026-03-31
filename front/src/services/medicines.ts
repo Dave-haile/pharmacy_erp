@@ -10,6 +10,7 @@ export const fetchMedicines = async (
     category: string;
     supplier: string;
     status: string;
+    include_inactive?: boolean;
   },
 ) => {
   const params = new URLSearchParams({
@@ -33,6 +34,9 @@ export const fetchMedicines = async (
   }
   if (filters.status) {
     params.append("status", filters.status);
+  }
+  if (filters.include_inactive) {
+    params.append("include_inactive", "true");
   }
 
   const res = await api.get(`/api/inventory/medicines/?${params.toString()}`);

@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => {
   const VITE_API_BASE_URL = env.VITE_API_BASE_URL || "http://localhost:8000";
   return {
     server: {
+      open: true,
       port: 5173,
       strictPort: false,
       host: "0.0.0.0",

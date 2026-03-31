@@ -45,7 +45,11 @@ const ItemMaster: React.FC = () => {
   }, [filters]);
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["medicines", currentPage, pageSize, debouncedFilters],
-    queryFn: () => fetchMedicines(currentPage, pageSize, debouncedFilters),
+    queryFn: () =>
+      fetchMedicines(currentPage, pageSize, {
+        ...debouncedFilters,
+        include_inactive: true,
+      }),
     staleTime: 60 * 1000,
     placeholderData: keepPreviousData,
   });

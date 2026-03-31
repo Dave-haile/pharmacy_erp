@@ -1,13 +1,14 @@
 import hashlib
 import json
 import re
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.core.cache import cache
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum, Value
+from django.db.models import Count, DecimalField, IntegerField, Q, Sum, Value
+from django.db.models.deletion import ProtectedError
 from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from django.utils import timezone
@@ -51,7 +52,9 @@ def _require_roles(request, allowed_roles):
     role = getattr(request.user, "role", None)
     if role in allowed_roles:
         return None
-    return JsonResponse({"error": "You do not have permission to perform this action."}, status=403)
+    return JsonResponse(
+        {"error": "You do not have permission to perform this action."}, status=403
+    )
 
 
 def _compact_text(value):
@@ -131,23 +134,432 @@ def _filter_logs_for_entity(queryset, entity_key, entity_id):
     return matched_logs
 
 
-def dashboard_summary(request):
-    cache_key = f"dashboard_summary"
+def _decimal_to_str(value):
+    if value in (None, ""):
+        return "0.00"
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    return format(value.quantize(Decimal("0.01")), "f")
+
+
+def _format_change_label(current, previous, noun):
+    current_value = Decimal(str(current or 0))
+    previous_value = Decimal(str(previous or 0))
+
+    if previous_value == 0:
+        if current_value == 0:
+            return f"No change vs yesterday's {noun}"
+        return f"New activity vs yesterday's {noun}"
+
+    delta_pct = ((current_value - previous_value) / previous_value) * Decimal("100")
+    rounded_delta = abs(delta_pct.quantize(Decimal("0.1")))
+    direction = "up" if delta_pct >= 0 else "down"
+    return f"{rounded_delta}% {direction} from yesterday"
+
+
+def _month_start(current_date):
+    return current_date.replace(day=1)
+
+
+def _shift_month(current_date, delta_months):
+    month_index = (current_date.year * 12 + current_date.month - 1) + delta_months
+    year = month_index // 12
+    month = month_index % 12 + 1
+    return current_date.replace(year=year, month=month, day=1)
+
+
+def _infer_log_type(action):
+    normalized = (action or "").lower()
+    if any(token in normalized for token in ("cancel", "delete", "error", "fail")):
+        return "warning"
+    if any(
+        token in normalized
+        for token in ("submit", "posted", "create", "received", "approved", "login")
+    ):
+        return "success"
+    return "info"
+
+
+def _build_weekly_sales_series(today):
+    start_date = today - timedelta(days=6)
+    sales = (
+        Sale.objects.filter(status=Sale.STATUS_POSTED, created_at__date__gte=start_date)
+        .values("created_at__date")
+        .annotate(
+            total=Coalesce(
+                Sum("total_amount"),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            )
+        )
+    )
+    totals_by_date = {row["created_at__date"]: row["total"] for row in sales}
+
+    points = []
+    for offset in range(7):
+        point_date = start_date + timedelta(days=offset)
+        points.append(
+            {
+                "date": point_date.isoformat(),
+                "label": point_date.strftime("%a"),
+                "sales": _decimal_to_str(totals_by_date.get(point_date, Decimal("0"))),
+            }
+        )
+    return points
+
+
+def _build_daily_sales_series(today):
+    sales = (
+        Sale.objects.filter(status=Sale.STATUS_POSTED, created_at__date=today)
+        .values_list("created_at", "total_amount")
+        .order_by("created_at")
+    )
+
+    buckets = {}
+    for created_at, total_amount in sales:
+        local_dt = timezone.localtime(created_at)
+        bucket_hour = (local_dt.hour // 3) * 3
+        buckets[bucket_hour] = buckets.get(bucket_hour, Decimal("0")) + (
+            total_amount or Decimal("0")
+        )
+
+    return [
+        {
+            "hour": bucket_hour,
+            "label": f"{bucket_hour:02d}:00",
+            "sales": _decimal_to_str(buckets.get(bucket_hour, Decimal("0"))),
+        }
+        for bucket_hour in range(0, 24, 3)
+    ]
+
+
+def _build_monthly_revenue_series(today):
+    month_starts = [_shift_month(_month_start(today), delta) for delta in range(-5, 1)]
+    series = []
+
+    for month_start in month_starts:
+        next_month = _shift_month(month_start, 1)
+        totals = Sale.objects.filter(
+            status=Sale.STATUS_POSTED,
+            created_at__date__gte=month_start,
+            created_at__date__lt=next_month,
+        ).aggregate(
+            income=Coalesce(
+                Sum("total_amount"),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            ),
+            sales_count=Count("id"),
+        )
+        series.append(
+            {
+                "month": month_start.strftime("%b"),
+                "month_start": month_start.isoformat(),
+                "income": _decimal_to_str(totals["income"]),
+                "sales_count": totals["sales_count"],
+            }
+        )
+
+    return series
+
+
+def _build_top_products(limit=5):
+    top_items = (
+        SaleItem.objects.select_related("medicine")
+        .filter(sale__status=Sale.STATUS_POSTED)
+        .values("medicine_id", "medicine__name")
+        .annotate(
+            quantity=Coalesce(Sum("quantity"), Value(0, output_field=IntegerField())),
+            revenue=Coalesce(
+                Sum("subtotal"),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            ),
+        )
+        .order_by("-revenue", "medicine__name")[:limit]
+    )
+
+    palette = ["#10b981", "#3b82f6", "#f59e0b", "#6366f1", "#94a3b8"]
+    return [
+        {
+            "medicine_id": row["medicine_id"],
+            "name": row["medicine__name"] or "Unknown",
+            "value": _decimal_to_str(row["revenue"]),
+            "quantity": row["quantity"],
+            "color": palette[index % len(palette)],
+        }
+        for index, row in enumerate(top_items)
+    ]
+
+
+def _build_recent_activity(limit=7):
+    logs = UserLog.objects.select_related("user").order_by("-timestamp")[:limit]
+    results = []
+
+    for log in logs:
+        results.append(
+            {
+                "id": log.log_id,
+                "timestamp": log.timestamp.isoformat(),
+                "time": timezone.localtime(log.timestamp).strftime("%H:%M"),
+                "type": _infer_log_type(log.action),
+                "action": log.action,
+                "message": _summarize_log_details(log.details) or log.action,
+                "user": getattr(log.user, "username", None)
+                or getattr(log.user, "email", "")
+                or "System",
+            }
+        )
+
+    return results
+
+
+def _build_inventory_hub_summary(expiry_soon_days, low_stock_threshold):
+    snapshot = _build_inventory_snapshot(expiry_soon_days, low_stock_threshold)
+    inventory_items = snapshot["items"]
+
+    category_totals = {}
+    for item in inventory_items:
+        category = item["category"] or "Uncategorized"
+        category_totals[category] = category_totals.get(category, 0) + item["quantity"]
+
+    category_stock_levels = [
+        {"category": category, "stock": stock}
+        for category, stock in sorted(
+            category_totals.items(),
+            key=lambda current: (-current[1], current[0].lower()),
+        )[:5]
+    ]
+
+    month_starts = [
+        _shift_month(_month_start(timezone.localdate()), delta)
+        for delta in range(-5, 1)
+    ]
+    inventory_value_trend = []
+    for month_start in month_starts:
+        next_month = _shift_month(month_start, 1)
+        month_value = Decimal("0")
+        month_batches = Batches.objects.filter(
+            created_at__date__gte=month_start,
+            created_at__date__lt=next_month,
+        )
+        for batch in month_batches:
+            month_value += (batch.purchase_price or Decimal("0")) * Decimal(
+                str(batch.quantity)
+            )
+
+        inventory_value_trend.append(
+            {
+                "month": month_start.strftime("%b"),
+                "month_start": month_start.isoformat(),
+                "value": _decimal_to_str(month_value),
+            }
+        )
+
+    stock_distribution = [
+        {
+            "name": "In Stock",
+            "value": sum(
+                1 for item in inventory_items if item["status_key"] == "in_stock"
+            ),
+            "color": "#10b981",
+        },
+        {
+            "name": "Low Stock",
+            "value": sum(
+                1 for item in inventory_items if item["status_key"] == "low_stock"
+            ),
+            "color": "#ef4444",
+        },
+        {
+            "name": "Expiring Soon",
+            "value": sum(
+                1 for item in inventory_items if item["status_key"] == "expiring_soon"
+            ),
+            "color": "#f59e0b",
+        },
+        {
+            "name": "Expired",
+            "value": sum(
+                1 for item in inventory_items if item["status_key"] == "expired"
+            ),
+            "color": "#64748b",
+        },
+    ]
+
+    total_value = sum(
+        Decimal(item["unit_cost"]) * Decimal(str(item["quantity"]))
+        for item in inventory_items
+    )
+
+    return {
+        "generated_at": timezone.now().isoformat(),
+        "category_stock_levels": category_stock_levels,
+        "inventory_value_trend": inventory_value_trend,
+        "stock_distribution": stock_distribution,
+        "summary": {
+            **snapshot["summary"],
+            "total_value": _decimal_to_str(total_value),
+        },
+    }
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def inventory_hub_summary(request):
+    expiry_soon_days = _get_inventory_threshold(
+        request,
+        "expiry_soon_days",
+        EXPIRY_SOON_DEFAULT_DAYS,
+    )
+    low_stock_threshold = _get_inventory_threshold(
+        request,
+        "low_stock_threshold",
+        LOW_STOCK_DEFAULT_THRESHOLD,
+        minimum=1,
+        maximum=10000,
+    )
+
+    cache_key = (
+        f"inventory_hub_summary:{expiry_soon_days}:{low_stock_threshold}:"
+        f"{getattr(request.user, 'id', 'anon')}"
+    )
+    should_refresh = str(request.GET.get("refresh", "")).lower() in {"1", "true", "yes"}
+    if should_refresh:
+        cache.delete(cache_key)
 
     data = cache.get(cache_key)
 
     if not data:
-        total_sales = Sale.objects.aggregate(total=Sum("amount"))["total"]
+        data = _build_inventory_hub_summary(expiry_soon_days, low_stock_threshold)
+        cache.set(cache_key, data, timeout=60)
+
+    return JsonResponse(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dashboard_summary(request):
+    expiry_soon_days = _get_inventory_threshold(
+        request,
+        "expiry_soon_days",
+        EXPIRY_SOON_DEFAULT_DAYS,
+    )
+    low_stock_threshold = _get_inventory_threshold(
+        request,
+        "low_stock_threshold",
+        LOW_STOCK_DEFAULT_THRESHOLD,
+        minimum=1,
+        maximum=10000,
+    )
+
+    cache_key = (
+        f"dashboard_summary:{expiry_soon_days}:{low_stock_threshold}:"
+        f"{getattr(request.user, 'id', 'anon')}"
+    )
+    should_refresh = str(request.GET.get("refresh", "")).lower() in {"1", "true", "yes"}
+    if should_refresh:
+        cache.delete(cache_key)
+
+    data = cache.get(cache_key)
+
+    if not data:
+        today = timezone.localdate()
+        yesterday = today - timedelta(days=1)
+
+        today_sales = Sale.objects.filter(
+            status=Sale.STATUS_POSTED,
+            created_at__date=today,
+        ).aggregate(
+            total=Coalesce(
+                Sum("total_amount"),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            ),
+            count=Count("id"),
+        )
+        yesterday_sales = Sale.objects.filter(
+            status=Sale.STATUS_POSTED,
+            created_at__date=yesterday,
+        ).aggregate(
+            total=Coalesce(
+                Sum("total_amount"),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            ),
+            count=Count("id"),
+        )
+
+        snapshot = _build_inventory_snapshot(expiry_soon_days, low_stock_threshold)
+        inventory_items = snapshot["items"]
+        low_stock_items = [
+            item
+            for item in inventory_items
+            if item["is_low_stock"] and not item["is_expired"]
+        ]
+        inventory_value = sum(
+            Decimal(item["unit_cost"]) * Decimal(str(item["quantity"]))
+            for item in inventory_items
+        )
+        top_products = _build_top_products()
+
+        status_counts = {
+            "in_stock": sum(
+                1 for item in inventory_items if item["status_key"] == "in_stock"
+            ),
+            "low_stock": len(low_stock_items),
+            "expiring_soon": sum(
+                1 for item in inventory_items if item["status_key"] == "expiring_soon"
+            ),
+            "expired": sum(
+                1 for item in inventory_items if item["status_key"] == "expired"
+            ),
+        }
         total_products = Medicine.objects.count()
+        total_suppliers = Supplier.objects.filter(is_active=True).count()
+        total_sales = Sale.objects.filter(status=Sale.STATUS_POSTED).aggregate(
+            total=Coalesce(
+                Sum("total_amount"),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            )
+        )["total"]
 
         data = {
-            "total_sales": total_sales,
-            "total_products": total_products,
+            "generated_at": timezone.now().isoformat(),
+            "kpis": {
+                "today_sales": _decimal_to_str(today_sales["total"]),
+                "today_sales_count": today_sales["count"],
+                "today_sales_trend": _format_change_label(
+                    today_sales["total"], yesterday_sales["total"], "sales"
+                ),
+                "total_products": total_products,
+                "total_products_trend": "Active in catalog",
+                "low_stock_count": len(low_stock_items),
+                "low_stock_trend": f"Threshold <= {low_stock_threshold} units",
+                "total_suppliers": total_suppliers,
+                "total_suppliers_trend": "Active suppliers",
+                "inventory_value": _decimal_to_str(inventory_value),
+                "inventory_units": snapshot["summary"]["total_quantity"],
+                "expiring_soon_count": snapshot["summary"]["expiring_soon_count"],
+                "total_sales": _decimal_to_str(total_sales),
+            },
+            "charts": {
+                "weekly_sales": _build_weekly_sales_series(today),
+                "daily_sales": _build_daily_sales_series(today),
+                "monthly_revenue": _build_monthly_revenue_series(today),
+            },
+            "top_products": top_products,
+            "recent_activity": _build_recent_activity(),
+            "alerts": low_stock_items[:6],
+            "inventory_summary": snapshot["summary"],
+            "inventory_status": status_counts,
         }
 
         cache.set(cache_key, data, timeout=60)  # 1 minute
 
     return JsonResponse(data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def clear_application_cache(request):
+    cache.clear()
+    return JsonResponse({"message": "Application cache cleared."})
 
 
 def _get_inventory_threshold(request, key, default_value, minimum=1, maximum=365):
@@ -188,11 +600,22 @@ def _inventory_status(quantity, expiry_date, expiry_soon_days, low_stock_thresho
     }
 
 
-def _build_inventory_snapshot(expiry_soon_days, low_stock_threshold):
+def _build_inventory_snapshot(
+    expiry_soon_days,
+    low_stock_threshold,
+    eligible_only=False,
+):
+    batch_queryset = Batches.objects.filter(quantity__gt=0)
+    if eligible_only:
+        batch_queryset = batch_queryset.filter(
+            product_id__is_active=True,
+            product_id__status=Medicine.STATUS_SUBMITTED,
+        )
+
     batches = list(
-        Batches.objects.filter(quantity__gt=0)
-        .select_related("product_id__category", "product_id__supplier", "supplier_id")
-        .order_by(
+        batch_queryset.select_related(
+            "product_id__category", "product_id__supplier", "supplier_id"
+        ).order_by(
             "product_id__name",
             "created_at",
             "manufacturing_date",
@@ -267,6 +690,8 @@ def _build_inventory_snapshot(expiry_soon_days, low_stock_threshold):
             ),
             "unit_cost": str(batch.purchase_price),
             "selling_price": str(medicine.selling_price),
+            "medicine_status": medicine.status,
+            "medicine_is_active": medicine.is_active,
             "manufacturing_date": batch.manufacturing_date.isoformat(),
             "expiry_date": batch.expiry_date.isoformat(),
             "location": "Main Store",
@@ -337,7 +762,12 @@ def inventory_list(request):
         maximum=10000,
     )
 
-    snapshot = _build_inventory_snapshot(expiry_soon_days, low_stock_threshold)
+    eligible_only = _is_truthy_query_value(request.GET.get("eligible_only"))
+    snapshot = _build_inventory_snapshot(
+        expiry_soon_days,
+        low_stock_threshold,
+        eligible_only=eligible_only,
+    )
     items = snapshot["items"]
 
     batch_query = _compact_text(request.GET.get("batch", ""))
@@ -537,7 +967,9 @@ def purchases_list(request):
 
     return JsonResponse(
         {
-            "results": [_serialize_purchase(purchase) for purchase in page_obj.object_list],
+            "results": [
+                _serialize_purchase(purchase) for purchase in page_obj.object_list
+            ],
             "count": paginator.count,
             "total_pages": paginator.num_pages,
             "current_page": page_obj.number,
@@ -586,7 +1018,9 @@ def _serialize_grn(grn: GoodRecivingNote, include_items=False):
                 "unit_price": str(item.unit_price),
                 "total_price": str(item.total_price),
                 "batch_id": item.batch_number_id,
-                "batch_number": item.batch_number.batch_number if item.batch_number else "",
+                "batch_number": item.batch_number.batch_number
+                if item.batch_number
+                else "",
                 "expiry_date": item.expiry_date.isoformat(),
             }
             for item in GoodRecivingNoteItem.objects.select_related(
@@ -820,6 +1254,36 @@ def _parse_date_value(value, field_name):
     return parsed
 
 
+def _is_truthy_query_value(value):
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_fetchable_medicine(medicine_id, prefix):
+    try:
+        return Medicine.objects.get(
+            pk=medicine_id,
+            is_active=True,
+            status=Medicine.STATUS_SUBMITTED,
+        )
+    except Medicine.DoesNotExist as exc:
+        raise ValueError(
+            f"{prefix}: medicine must be active and submitted before it can be used in another document."
+        ) from exc
+
+
+def _get_fetchable_supplier(supplier_id):
+    try:
+        return Supplier.objects.get(
+            pk=supplier_id,
+            is_active=True,
+            status=Supplier.STATUS_SUBMITTED,
+        )
+    except Supplier.DoesNotExist as exc:
+        raise ValueError(
+            "Supplier must be active and submitted before it can be used in stock entry."
+        ) from exc
+
+
 def _serialize_stock_entry(stock_entry, include_items=False):
     total_quantity = getattr(stock_entry, "total_quantity", None)
     if total_quantity is None:
@@ -983,10 +1447,7 @@ def _normalize_stock_entry_payload(payload):
     if not isinstance(items, list) or len(items) == 0:
         raise ValueError("At least one stock entry item is required.")
 
-    try:
-        supplier = Supplier.objects.get(pk=supplier_id)
-    except Supplier.DoesNotExist as exc:
-        raise ValueError("Supplier not found.") from exc
+    supplier = _get_fetchable_supplier(supplier_id)
 
     try:
         parsed_tax = Decimal(str(tax or "0"))
@@ -1018,10 +1479,7 @@ def _normalize_stock_entry_payload(payload):
         if not expiry_date:
             raise ValueError(f"{prefix}: expiry date is required.")
 
-        try:
-            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
-        except Medicine.DoesNotExist as exc:
-            raise ValueError(f"{prefix}: medicine not found.") from exc
+        medicine = _get_fetchable_medicine(medicine_id, prefix)
 
         quantity = _parse_positive_int(item.get("quantity"), f"{prefix} quantity")
         unit_price = _parse_decimal(item.get("unit_price"), f"{prefix} unit price")
@@ -1256,6 +1714,23 @@ def _reverse_posted_stock_entry(stock_entry):
     if not posted_items:
         raise ValueError("Posted stock entry does not contain any items.")
 
+    batch_ids = [item.batch_id for item in posted_items if item.batch_id]
+    if batch_ids:
+        linked_sale_item = (
+            SaleItem.objects.select_related("sale", "medicine")
+            .filter(batch_id__in=batch_ids)
+            .exclude(sale__status=Sale.STATUS_CANCELLED)
+            .order_by("sale__created_at", "id")
+            .first()
+        )
+        if linked_sale_item:
+            raise ValueError(
+                "Cannot cancel stock entry because stock-out "
+                f"{linked_sale_item.sale.posting_number} still references batch "
+                f"{linked_sale_item.batch.batch_number} for {linked_sale_item.medicine.name}. "
+                "Cancel the stock-out document first."
+            )
+
     reversed_items = []
 
     for item in posted_items:
@@ -1278,7 +1753,9 @@ def _reverse_posted_stock_entry(stock_entry):
             .first()
         )
         if not inventory_row:
-            raise ValueError(f"Inventory record is missing for batch {item.batch_number}.")
+            raise ValueError(
+                f"Inventory record is missing for batch {item.batch_number}."
+            )
 
         if inventory_row.quantity < item.quantity:
             raise ValueError(
@@ -1459,10 +1936,7 @@ def _normalize_sale_payload(payload):
         if not medicine_id:
             raise ValueError(f"{prefix}: medicine is required.")
 
-        try:
-            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
-        except Medicine.DoesNotExist as exc:
-            raise ValueError(f"{prefix}: medicine not found.") from exc
+        medicine = _get_fetchable_medicine(medicine_id, prefix)
 
         quantity = _parse_positive_int(item.get("quantity"), f"{prefix} quantity")
         unit_price = _parse_decimal(
@@ -1476,6 +1950,8 @@ def _normalize_sale_payload(payload):
                 batch = Batches.objects.get(
                     pk=batch_id,
                     product_id=medicine,
+                    product_id__is_active=True,
+                    product_id__status=Medicine.STATUS_SUBMITTED,
                     quantity__gt=0,
                     expiry_date__gt=today,
                 )
@@ -1504,6 +1980,8 @@ def _normalize_sale_payload(payload):
         fefo_batches = list(
             Batches.objects.filter(
                 product_id=medicine,
+                product_id__is_active=True,
+                product_id__status=Medicine.STATUS_SUBMITTED,
                 quantity__gt=0,
                 expiry_date__gt=timezone.localdate(),
             ).order_by(
@@ -1586,7 +2064,10 @@ def _post_sale(sale):
         raise ValueError("One or more allocated batches are no longer available.")
 
     inventory_keys = sorted(
-        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in sale_items}
+        {
+            (item.medicine_id, locked_batches[item.batch_id].batch_number)
+            for item in sale_items
+        }
     )
     locked_inventory = {}
     for medicine_id, batch_number in inventory_keys:
@@ -1616,7 +2097,9 @@ def _post_sale(sale):
 
         inventory_row = locked_inventory.get((item.medicine_id, batch.batch_number))
         if not inventory_row:
-            raise ValueError(f"Inventory record is missing for batch {batch.batch_number}.")
+            raise ValueError(
+                f"Inventory record is missing for batch {batch.batch_number}."
+            )
 
         if inventory_row.quantity < item.quantity:
             raise ValueError(
@@ -1686,7 +2169,10 @@ def _reverse_posted_sale(sale):
     if len(locked_batches) != len(batch_ids):
         raise ValueError("One or more allocated batches are no longer available.")
     inventory_keys = sorted(
-        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in sale_items}
+        {
+            (item.medicine_id, locked_batches[item.batch_id].batch_number)
+            for item in sale_items
+        }
     )
     locked_inventory = {}
     for medicine_id, batch_number in inventory_keys:
@@ -1774,18 +2260,22 @@ def medicines_list(request):
     category = request.GET.get("category", "")
     supplier = request.GET.get("supplier", "")
     status = request.GET.get("status", "")
+    include_inactive = _is_truthy_query_value(request.GET.get("include_inactive"))
 
     # 🔑 Unique cache key per filter combination
-    raw_key = f"medicines:{page}:{page_size}:{search}:{category}:{supplier}:{status}"
+    raw_key = (
+        f"medicines:{page}:{page_size}:{search}:{category}:{supplier}:{status}:"
+        f"{include_inactive}"
+    )
     cache_key = hashlib.md5(raw_key.encode()).hexdigest()
 
     cached_response = cache.get(cache_key)
     if cached_response:
         return JsonResponse(cached_response)
 
-    queryset = Medicine.objects.filter(is_active=True).select_related(
-        "category", "supplier"
-    )
+    queryset = Medicine.objects.select_related("category", "supplier")
+    if not include_inactive:
+        queryset = queryset.filter(is_active=True)
 
     if search:
         queryset = queryset.filter(
@@ -2322,6 +2812,64 @@ def category_logs(request, category_id):
     return JsonResponse({"results": serialized_logs})
 
 
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def category_delete(request, category_id):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    try:
+        category = Category.objects.annotate(
+            medicine_count=Count("medicines", distinct=True),
+            child_count=Count("category", distinct=True),
+        ).get(pk=category_id)
+    except Category.DoesNotExist:
+        return JsonResponse({"error": "Category not found"}, status=404)
+
+    if (category.medicine_count or 0) > 0:
+        linked_medicine = (
+            Medicine.objects.filter(category_id=category.id)
+            .order_by("name")
+            .values("id", "name", "naming_series")
+            .first()
+        )
+        return JsonResponse(
+            {
+                "error": "Category with linked medicines cannot be deleted.",
+                "linked_medicine": linked_medicine,
+            },
+            status=400,
+        )
+
+    if (category.child_count or 0) > 0:
+        return JsonResponse(
+            {"error": "Category with subcategories cannot be deleted."},
+            status=400,
+        )
+
+    category_name = category.name
+    category_series = category.naming_series
+
+    with transaction.atomic():
+        category.delete()
+        UserLog.objects.create(
+            user=request.user,
+            action="Category Deleted",
+            details=json.dumps(
+                {
+                    "category_id": category_id,
+                    "name": category_name,
+                    "naming_series": category_series,
+                },
+                default=str,
+            ),
+        )
+
+    cache.clear()
+    return JsonResponse({"message": "Category deleted successfully"})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def medicine_detail_by_naming_series(request, naming_series):
@@ -2331,7 +2879,7 @@ def medicine_detail_by_naming_series(request, naming_series):
     """
     try:
         # Use the indexed naming_series field for fast lookup
-        medicine = Medicine.objects.get(naming_series=naming_series, is_active=True)
+        medicine = Medicine.objects.get(naming_series=naming_series)
     except Medicine.DoesNotExist:
         return JsonResponse({"error": "Medicine not found"}, status=404)
 
@@ -2627,6 +3175,74 @@ def supplier_cancel(request, supplier_id):
             "supplier": _serialize_supplier(supplier),
         }
     )
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def supplier_delete(request, supplier_id):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    try:
+        supplier = Supplier.objects.annotate(medicine_count=Count("medicines")).get(
+            id=supplier_id
+        )
+    except Supplier.DoesNotExist:
+        return JsonResponse({"error": "Supplier not found"}, status=404)
+
+    if supplier.status == Supplier.STATUS_SUBMITTED:
+        return JsonResponse(
+            {"error": "Cancel the document before deleting this supplier."},
+            status=400,
+        )
+
+    if supplier.status not in (
+        Supplier.STATUS_DRAFT,
+        Supplier.STATUS_CANCELLED,
+    ):
+        return JsonResponse(
+            {"error": "Only draft or cancelled suppliers can be deleted."},
+            status=400,
+        )
+
+    if (supplier.medicine_count or 0) > 0:
+        linked_medicine = (
+            Medicine.objects.filter(supplier_id=supplier.id)
+            .order_by("name")
+            .values("id", "name", "naming_series")
+            .first()
+        )
+        return JsonResponse(
+            {
+                "error": "Supplier with linked medicines cannot be deleted.",
+                "linked_medicine": linked_medicine,
+            },
+            status=400,
+        )
+
+    supplier_name = supplier.name
+    supplier_series = supplier.naming_series
+    supplier_status = supplier.status
+
+    with transaction.atomic():
+        supplier.delete()
+        UserLog.objects.create(
+            user=request.user,
+            action="Supplier Deleted",
+            details=json.dumps(
+                {
+                    "supplier_id": supplier_id,
+                    "name": supplier_name,
+                    "naming_series": supplier_series,
+                    "status": supplier_status,
+                },
+                default=str,
+            ),
+        )
+
+    cache.clear()
+    return JsonResponse({"message": "Supplier deleted successfully"})
 
 
 @api_view(["GET"])
@@ -2929,6 +3545,82 @@ def stock_entry_cancel(request, stock_entry_id: int):
     )
 
 
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def stock_entry_delete(request, stock_entry_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    try:
+        stock_entry = StockEntry.objects.prefetch_related("items").get(
+            id=stock_entry_id
+        )
+    except StockEntry.DoesNotExist:
+        return JsonResponse({"error": "Stock entry not found."}, status=404)
+
+    if stock_entry.status == StockEntry.STATUS_POSTED:
+        return JsonResponse(
+            {"error": "Cancel the document before deleting this stock entry."},
+            status=400,
+        )
+
+    if stock_entry.status not in (
+        StockEntry.STATUS_DRAFT,
+        StockEntry.STATUS_CANCELLED,
+    ):
+        return JsonResponse(
+            {"error": "Only draft or cancelled stock entries can be deleted."},
+            status=400,
+        )
+
+    batch_ids = list(
+        stock_entry.items.exclude(batch_id__isnull=True).values_list(
+            "batch_id", flat=True
+        )
+    )
+    if batch_ids:
+        linked_sale_item = (
+            SaleItem.objects.select_related("sale", "medicine", "batch")
+            .filter(batch_id__in=batch_ids)
+            .exclude(sale__status=Sale.STATUS_CANCELLED)
+            .order_by("sale__created_at", "id")
+            .first()
+        )
+        if linked_sale_item:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Cannot delete stock entry because stock-out "
+                        f"{linked_sale_item.sale.posting_number} still references batch "
+                        f"{linked_sale_item.batch.batch_number} for {linked_sale_item.medicine.name}. "
+                        "Cancel the stock-out document first."
+                    )
+                },
+                status=400,
+            )
+
+    posting_number = stock_entry.posting_number
+    status_value = stock_entry.status
+
+    with transaction.atomic():
+        stock_entry.delete()
+        UserLog.objects.create(
+            user=request.user,
+            action="Stock Entry Deleted",
+            details=json.dumps(
+                {
+                    "stock_entry_id": stock_entry_id,
+                    "posting_number": posting_number,
+                    "status": status_value,
+                },
+                default=str,
+            ),
+        )
+
+    return JsonResponse({"message": "Stock entry deleted successfully."})
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def stock_out_batches(request):
@@ -2937,6 +3629,8 @@ def stock_out_batches(request):
     queryset = Batches.objects.filter(
         quantity__gt=0,
         expiry_date__gt=timezone.localdate(),
+        product_id__is_active=True,
+        product_id__status=Medicine.STATUS_SUBMITTED,
     ).select_related("product_id")
 
     if medicine_id:
@@ -3234,6 +3928,53 @@ def stock_out_cancel(request, sale_id: int):
     )
 
 
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def stock_out_delete(request, sale_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    try:
+        sale = Sale.objects.prefetch_related("items").get(id=sale_id)
+    except Sale.DoesNotExist:
+        return JsonResponse({"error": "Stock-out document not found."}, status=404)
+
+    if sale.status == Sale.STATUS_POSTED:
+        return JsonResponse(
+            {"error": "Cancel the document before deleting this stock-out."},
+            status=400,
+        )
+
+    if sale.status not in (Sale.STATUS_DRAFT, Sale.STATUS_CANCELLED):
+        return JsonResponse(
+            {"error": "Only draft or cancelled stock-out documents can be deleted."},
+            status=400,
+        )
+
+    posting_number = sale.posting_number
+    invoice_number = sale.invoice_number
+    status_value = sale.status
+
+    with transaction.atomic():
+        sale.delete()
+        UserLog.objects.create(
+            user=request.user,
+            action="Stock Out Deleted",
+            details=json.dumps(
+                {
+                    "sale_id": sale_id,
+                    "posting_number": posting_number,
+                    "invoice_number": invoice_number,
+                    "status": status_value,
+                },
+                default=str,
+            ),
+        )
+
+    return JsonResponse({"message": "Stock-out deleted successfully."})
+
+
 def _serialize_stock_adjustment(adjustment: StockAdjustment, include_items=False):
     payload = {
         "id": adjustment.id,
@@ -3290,19 +4031,23 @@ def _normalize_stock_adjustment_payload(payload):
         if not batch_id:
             raise ValueError(f"{prefix}: batch is required.")
 
+        medicine = _get_fetchable_medicine(medicine_id, prefix)
         try:
-            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
-        except Medicine.DoesNotExist as exc:
-            raise ValueError(f"{prefix}: medicine not found.") from exc
-        try:
-            batch = Batches.objects.get(pk=batch_id, product_id=medicine)
+            batch = Batches.objects.get(
+                pk=batch_id,
+                product_id=medicine,
+                product_id__is_active=True,
+                product_id__status=Medicine.STATUS_SUBMITTED,
+            )
         except Batches.DoesNotExist as exc:
             raise ValueError(f"{prefix}: batch not found for this medicine.") from exc
 
         try:
             quantity_change = int(quantity_change)
         except (TypeError, ValueError) as exc:
-            raise ValueError(f"{prefix}: quantity_change must be a valid integer.") from exc
+            raise ValueError(
+                f"{prefix}: quantity_change must be a valid integer."
+            ) from exc
         if quantity_change == 0:
             raise ValueError(f"{prefix}: quantity_change cannot be zero.")
 
@@ -3343,7 +4088,10 @@ def _post_stock_adjustment(adjustment: StockAdjustment):
         raise ValueError("One or more batches are no longer available.")
 
     inventory_keys = sorted(
-        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in items}
+        {
+            (item.medicine_id, locked_batches[item.batch_id].batch_number)
+            for item in items
+        }
     )
     locked_inventory = {}
     for medicine_id, batch_number in inventory_keys:
@@ -3428,7 +4176,10 @@ def _reverse_posted_stock_adjustment(adjustment: StockAdjustment):
         raise ValueError("One or more batches are no longer available.")
 
     inventory_keys = sorted(
-        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in items}
+        {
+            (item.medicine_id, locked_batches[item.batch_id].batch_number)
+            for item in items
+        }
     )
     locked_inventory = {}
     for medicine_id, batch_number in inventory_keys:
@@ -3502,7 +4253,9 @@ def stock_adjustments_list(request):
     status = _compact_text(request.GET.get("status", "")).lower()
     reason = _compact_text(request.GET.get("reason", "")).lower()
 
-    queryset = StockAdjustment.objects.select_related("created_by").order_by("-created_at")
+    queryset = StockAdjustment.objects.select_related("created_by").order_by(
+        "-created_at"
+    )
     if posting_number:
         queryset = queryset.filter(posting_number__icontains=posting_number)
     if status:
@@ -3518,7 +4271,9 @@ def stock_adjustments_list(request):
 
     return JsonResponse(
         {
-            "results": [_serialize_stock_adjustment(adj) for adj in page_obj.object_list],
+            "results": [
+                _serialize_stock_adjustment(adj) for adj in page_obj.object_list
+            ],
             "count": paginator.count,
             "total_pages": paginator.num_pages,
             "current_page": page_obj.number,
@@ -3568,7 +4323,10 @@ def stock_adjustment_create(request):
                 user=request.user,
                 action="Stock Adjustment Draft Created",
                 details=json.dumps(
-                    {"stock_adjustment_id": adjustment.id, "posting_number": adjustment.posting_number},
+                    {
+                        "stock_adjustment_id": adjustment.id,
+                        "posting_number": adjustment.posting_number,
+                    },
                     default=str,
                 ),
             )
@@ -3577,9 +4335,14 @@ def stock_adjustment_create(request):
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=400)
 
-    adjustment = StockAdjustment.objects.select_related("created_by").get(id=adjustment.id)
+    adjustment = StockAdjustment.objects.select_related("created_by").get(
+        id=adjustment.id
+    )
     return JsonResponse(
-        {"message": "Stock adjustment draft created.", "adjustment": _serialize_stock_adjustment(adjustment, include_items=True)},
+        {
+            "message": "Stock adjustment draft created.",
+            "adjustment": _serialize_stock_adjustment(adjustment, include_items=True),
+        },
         status=201,
     )
 
@@ -3593,7 +4356,10 @@ def stock_adjustment_update(request, adjustment_id: int):
         return JsonResponse({"error": "Stock adjustment not found."}, status=404)
 
     previous_status = adjustment.status
-    if previous_status not in (StockAdjustment.STATUS_DRAFT, StockAdjustment.STATUS_CANCELLED):
+    if previous_status not in (
+        StockAdjustment.STATUS_DRAFT,
+        StockAdjustment.STATUS_CANCELLED,
+    ):
         return JsonResponse(
             {"error": "Only draft or cancelled stock adjustments can be edited."},
             status=400,
@@ -3666,13 +4432,18 @@ def stock_adjustment_submit(request, adjustment_id: int):
         return denied
     try:
         with transaction.atomic():
-            adjustment = StockAdjustment.objects.select_for_update().get(id=adjustment_id)
+            adjustment = StockAdjustment.objects.select_for_update().get(
+                id=adjustment_id
+            )
             _post_stock_adjustment(adjustment)
             UserLog.objects.create(
                 user=request.user,
                 action="Stock Adjustment Submitted",
                 details=json.dumps(
-                    {"stock_adjustment_id": adjustment.id, "posting_number": adjustment.posting_number},
+                    {
+                        "stock_adjustment_id": adjustment.id,
+                        "posting_number": adjustment.posting_number,
+                    },
                     default=str,
                 ),
             )
@@ -3689,7 +4460,10 @@ def stock_adjustment_submit(request, adjustment_id: int):
         .get(id=adjustment_id)
     )
     return JsonResponse(
-        {"message": "Stock adjustment submitted successfully.", "adjustment": _serialize_stock_adjustment(adjustment, include_items=True)}
+        {
+            "message": "Stock adjustment submitted successfully.",
+            "adjustment": _serialize_stock_adjustment(adjustment, include_items=True),
+        }
     )
 
 
@@ -3701,7 +4475,9 @@ def stock_adjustment_cancel(request, adjustment_id: int):
         return denied
     try:
         with transaction.atomic():
-            adjustment = StockAdjustment.objects.select_for_update().get(id=adjustment_id)
+            adjustment = StockAdjustment.objects.select_for_update().get(
+                id=adjustment_id
+            )
             _reverse_posted_stock_adjustment(adjustment)
             adjustment.status = StockAdjustment.STATUS_CANCELLED
             adjustment.save(update_fields=["status", "updated_at"])
@@ -3709,7 +4485,10 @@ def stock_adjustment_cancel(request, adjustment_id: int):
                 user=request.user,
                 action="Stock Adjustment Cancelled",
                 details=json.dumps(
-                    {"stock_adjustment_id": adjustment.id, "posting_number": adjustment.posting_number},
+                    {
+                        "stock_adjustment_id": adjustment.id,
+                        "posting_number": adjustment.posting_number,
+                    },
                     default=str,
                 ),
             )
@@ -3726,7 +4505,10 @@ def stock_adjustment_cancel(request, adjustment_id: int):
         .get(id=adjustment_id)
     )
     return JsonResponse(
-        {"message": "Stock adjustment cancelled successfully.", "adjustment": _serialize_stock_adjustment(adjustment, include_items=True)}
+        {
+            "message": "Stock adjustment cancelled successfully.",
+            "adjustment": _serialize_stock_adjustment(adjustment, include_items=True),
+        }
     )
 
 
@@ -3792,21 +4574,31 @@ def _normalize_sales_return_payload(payload):
         if not batch_id:
             raise ValueError(f"{prefix}: batch is required.")
 
+        medicine = _get_fetchable_medicine(medicine_id, prefix)
         try:
-            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
-        except Medicine.DoesNotExist as exc:
-            raise ValueError(f"{prefix}: medicine not found.") from exc
-        try:
-            batch = Batches.objects.get(pk=batch_id, product_id=medicine)
+            batch = Batches.objects.get(
+                pk=batch_id,
+                product_id=medicine,
+                product_id__is_active=True,
+                product_id__status=Medicine.STATUS_SUBMITTED,
+            )
         except Batches.DoesNotExist as exc:
             raise ValueError(f"{prefix}: batch not found for this medicine.") from exc
         if batch.expiry_date <= today:
             raise ValueError(f"{prefix}: cannot restock an expired batch.")
 
         quantity = _parse_positive_int(item.get("quantity"), f"{prefix} quantity")
-        unit_price = _parse_decimal(item.get("unit_price") or medicine.selling_price, f"{prefix} unit price")
+        unit_price = _parse_decimal(
+            item.get("unit_price") or medicine.selling_price, f"{prefix} unit price"
+        )
         normalized_items.append(
-            {"medicine": medicine, "batch": batch, "quantity": quantity, "unit_price": unit_price, "notes": (item.get("notes") or "").strip()}
+            {
+                "medicine": medicine,
+                "batch": batch,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "notes": (item.get("notes") or "").strip(),
+            }
         )
 
     return {
@@ -3833,7 +4625,10 @@ def _post_sales_return(doc: SalesReturn):
         raise ValueError("One or more batches are no longer available.")
 
     inventory_keys = sorted(
-        {(item.medicine_id, locked_batches[item.batch_id].batch_number) for item in items}
+        {
+            (item.medicine_id, locked_batches[item.batch_id].batch_number)
+            for item in items
+        }
     )
     locked_inventory = {}
     for medicine_id, batch_number in inventory_keys:
@@ -4015,7 +4810,10 @@ def sales_return_create(request):
 
     doc = SalesReturn.objects.select_related("created_by").get(id=doc.id)
     return JsonResponse(
-        {"message": "Sales return draft created.", "sales_return": _serialize_sales_return(doc, include_items=True)},
+        {
+            "message": "Sales return draft created.",
+            "sales_return": _serialize_sales_return(doc, include_items=True),
+        },
         status=201,
     )
 
@@ -4043,7 +4841,15 @@ def sales_return_update(request, return_id: int):
             doc.notes = normalized["notes"]
             if previous_status == SalesReturn.STATUS_CANCELLED:
                 doc.status = SalesReturn.STATUS_DRAFT
-            doc.save(update_fields=["reference_invoice", "customer_name", "notes", "status", "updated_at"])
+            doc.save(
+                update_fields=[
+                    "reference_invoice",
+                    "customer_name",
+                    "notes",
+                    "status",
+                    "updated_at",
+                ]
+            )
 
             doc.items.all().delete()
             for item in normalized["items"]:
@@ -4126,7 +4932,10 @@ def sales_return_submit(request, return_id: int):
         .get(id=return_id)
     )
     return JsonResponse(
-        {"message": "Sales return submitted successfully.", "sales_return": _serialize_sales_return(doc, include_items=True)}
+        {
+            "message": "Sales return submitted successfully.",
+            "sales_return": _serialize_sales_return(doc, include_items=True),
+        }
     )
 
 
@@ -4163,7 +4972,10 @@ def sales_return_cancel(request, return_id: int):
         .get(id=return_id)
     )
     return JsonResponse(
-        {"message": "Sales return cancelled successfully.", "sales_return": _serialize_sales_return(doc, include_items=True)}
+        {
+            "message": "Sales return cancelled successfully.",
+            "sales_return": _serialize_sales_return(doc, include_items=True),
+        }
     )
 
 
@@ -4236,19 +5048,29 @@ def _normalize_supplier_return_payload(payload):
         if not batch_id:
             raise ValueError(f"{prefix}: batch is required.")
 
+        medicine = _get_fetchable_medicine(medicine_id, prefix)
         try:
-            medicine = Medicine.objects.get(pk=medicine_id, is_active=True)
-        except Medicine.DoesNotExist as exc:
-            raise ValueError(f"{prefix}: medicine not found.") from exc
-        try:
-            batch = Batches.objects.get(pk=batch_id, product_id=medicine)
+            batch = Batches.objects.get(
+                pk=batch_id,
+                product_id=medicine,
+                product_id__is_active=True,
+                product_id__status=Medicine.STATUS_SUBMITTED,
+            )
         except Batches.DoesNotExist as exc:
             raise ValueError(f"{prefix}: batch not found for this medicine.") from exc
 
         quantity = _parse_positive_int(item.get("quantity"), f"{prefix} quantity")
-        unit_price = _parse_decimal(item.get("unit_price") or batch.purchase_price, f"{prefix} unit price")
+        unit_price = _parse_decimal(
+            item.get("unit_price") or batch.purchase_price, f"{prefix} unit price"
+        )
         normalized_items.append(
-            {"medicine": medicine, "batch": batch, "quantity": quantity, "unit_price": unit_price, "notes": (item.get("notes") or "").strip()}
+            {
+                "medicine": medicine,
+                "batch": batch,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "notes": (item.get("notes") or "").strip(),
+            }
         )
 
     return {
@@ -4388,7 +5210,9 @@ def supplier_returns_list(request):
 
     return JsonResponse(
         {
-            "results": [_serialize_supplier_return(doc) for doc in page_obj.object_list],
+            "results": [
+                _serialize_supplier_return(doc) for doc in page_obj.object_list
+            ],
             "count": paginator.count,
             "total_pages": paginator.num_pages,
             "current_page": page_obj.number,
@@ -4439,7 +5263,10 @@ def supplier_return_create(request):
                 user=request.user,
                 action="Supplier Return Draft Created",
                 details=json.dumps(
-                    {"supplier_return_id": doc.id, "posting_number": doc.posting_number},
+                    {
+                        "supplier_return_id": doc.id,
+                        "posting_number": doc.posting_number,
+                    },
                     default=str,
                 ),
             )
@@ -4450,7 +5277,10 @@ def supplier_return_create(request):
 
     doc = SupplierReturn.objects.select_related("created_by", "supplier").get(id=doc.id)
     return JsonResponse(
-        {"message": "Supplier return draft created.", "supplier_return": _serialize_supplier_return(doc, include_items=True)},
+        {
+            "message": "Supplier return draft created.",
+            "supplier_return": _serialize_supplier_return(doc, include_items=True),
+        },
         status=201,
     )
 
@@ -4464,7 +5294,10 @@ def supplier_return_update(request, return_id: int):
         return JsonResponse({"error": "Supplier return not found."}, status=404)
 
     previous_status = doc.status
-    if previous_status not in (SupplierReturn.STATUS_DRAFT, SupplierReturn.STATUS_CANCELLED):
+    if previous_status not in (
+        SupplierReturn.STATUS_DRAFT,
+        SupplierReturn.STATUS_CANCELLED,
+    ):
         return JsonResponse(
             {"error": "Only draft or cancelled supplier returns can be edited."},
             status=400,
@@ -4478,7 +5311,15 @@ def supplier_return_update(request, return_id: int):
             doc.notes = normalized["notes"]
             if previous_status == SupplierReturn.STATUS_CANCELLED:
                 doc.status = SupplierReturn.STATUS_DRAFT
-            doc.save(update_fields=["supplier", "reference_document", "notes", "status", "updated_at"])
+            doc.save(
+                update_fields=[
+                    "supplier",
+                    "reference_document",
+                    "notes",
+                    "status",
+                    "updated_at",
+                ]
+            )
 
             doc.items.all().delete()
             for item in normalized["items"]:
@@ -4544,7 +5385,10 @@ def supplier_return_submit(request, return_id: int):
                 user=request.user,
                 action="Supplier Return Submitted",
                 details=json.dumps(
-                    {"supplier_return_id": doc.id, "posting_number": doc.posting_number},
+                    {
+                        "supplier_return_id": doc.id,
+                        "posting_number": doc.posting_number,
+                    },
                     default=str,
                 ),
             )
@@ -4561,7 +5405,10 @@ def supplier_return_submit(request, return_id: int):
         .get(id=return_id)
     )
     return JsonResponse(
-        {"message": "Supplier return submitted successfully.", "supplier_return": _serialize_supplier_return(doc, include_items=True)}
+        {
+            "message": "Supplier return submitted successfully.",
+            "supplier_return": _serialize_supplier_return(doc, include_items=True),
+        }
     )
 
 
@@ -4581,7 +5428,10 @@ def supplier_return_cancel(request, return_id: int):
                 user=request.user,
                 action="Supplier Return Cancelled",
                 details=json.dumps(
-                    {"supplier_return_id": doc.id, "posting_number": doc.posting_number},
+                    {
+                        "supplier_return_id": doc.id,
+                        "posting_number": doc.posting_number,
+                    },
                     default=str,
                 ),
             )
@@ -4598,7 +5448,10 @@ def supplier_return_cancel(request, return_id: int):
         .get(id=return_id)
     )
     return JsonResponse(
-        {"message": "Supplier return cancelled successfully.", "supplier_return": _serialize_supplier_return(doc, include_items=True)}
+        {
+            "message": "Supplier return cancelled successfully.",
+            "supplier_return": _serialize_supplier_return(doc, include_items=True),
+        }
     )
 
 
@@ -4682,7 +5535,9 @@ def report_near_expiry(request):
                 "batch_number": batch.batch_number,
                 "medicine_id": medicine.id if medicine else None,
                 "medicine_name": medicine.name if medicine else "",
-                "category": medicine.category.name if medicine and medicine.category else "",
+                "category": medicine.category.name
+                if medicine and medicine.category
+                else "",
                 "supplier": batch.supplier_id.name if batch.supplier_id else "",
                 "quantity": batch.quantity,
                 "expiry_date": batch.expiry_date.isoformat(),
@@ -4723,10 +5578,14 @@ def report_stock_valuation(request):
 
     results = [
         {**entry, "value": str(entry["value"])}
-        for entry in sorted(totals.values(), key=lambda item: item["medicine_name"].lower())
+        for entry in sorted(
+            totals.values(), key=lambda item: item["medicine_name"].lower()
+        )
     ]
 
-    total_value = sum(Decimal(item["value"]) for item in results) if results else Decimal("0")
+    total_value = (
+        sum(Decimal(item["value"]) for item in results) if results else Decimal("0")
+    )
     return JsonResponse(
         {
             "count": len(results),
@@ -4760,7 +5619,10 @@ def report_sales_summary(request):
         sales_qs = sales_qs.filter(created_at__date__lte=end_date)
 
     totals = sales_qs.aggregate(
-        total_sales=Coalesce(Sum("total_amount"), Value(0)),
+        total_sales=Coalesce(
+            Sum("total_amount"),
+            Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+        ),
         sale_count=Count("id"),
     )
 
@@ -4768,8 +5630,14 @@ def report_sales_summary(request):
     top_items = (
         item_qs.values("medicine_id", "medicine__name")
         .annotate(
-            quantity=Coalesce(Sum("quantity"), Value(0)),
-            revenue=Coalesce(Sum("subtotal"), Value(0)),
+            quantity=Coalesce(
+                Sum("quantity"),
+                Value(0, output_field=IntegerField()),
+            ),
+            revenue=Coalesce(
+                Sum("subtotal"),
+                Value(0, output_field=DecimalField(max_digits=12, decimal_places=2)),
+            ),
         )
         .order_by("-revenue")[:10]
     )
@@ -4803,7 +5671,17 @@ def medicines_delete(request, medicine_id):
         medicine = Medicine.objects.get(id=medicine_id)
     except Medicine.DoesNotExist:
         return JsonResponse({"error": "Medicine not found"}, status=404)
-    medicine.delete()
+    try:
+        medicine.delete()
+    except ProtectedError:
+        return JsonResponse(
+            {
+                "error": (
+                    "This medicine cannot be deleted because it is linked to other documents."
+                )
+            },
+            status=400,
+        )
     UserLog.objects.create(
         user=request.user,
         action="Medicine Deleted",

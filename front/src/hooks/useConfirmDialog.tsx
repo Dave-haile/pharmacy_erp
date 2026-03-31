@@ -12,6 +12,7 @@ type ConfirmMode = "confirm" | "alert";
 export interface ConfirmOptions<TPayload = unknown> {
   title?: string;
   message: string;
+  content?: React.ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: ConfirmVariant;
@@ -48,8 +49,9 @@ export const ConfirmDialogProvider = ({
   children: React.ReactNode;
 }) => {
   const [state, setState] = useState<InternalState | null>(null);
-  const [resolver, setResolver] =
-    useState<((value: ConfirmResult) => void) | null>(null);
+  const [resolver, setResolver] = useState<
+    ((value: ConfirmResult) => void) | null
+  >(null);
 
   const close = useCallback(
     (result: ConfirmResult) => {
@@ -71,6 +73,7 @@ export const ConfirmDialogProvider = ({
           isOpen: true,
           title: options.title,
           message: options.message,
+          content: options.content,
           confirmLabel: options.confirmLabel,
           cancelLabel: options.cancelLabel,
           variant: options.variant ?? "default",
@@ -138,6 +141,7 @@ export const ConfirmDialogProvider = ({
               <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">
                 {state.message}
               </p>
+              {state.content && <div>{state.content}</div>}
             </div>
             <div className="px-6 py-4 border-t border-slate-800 flex items-center justify-end space-x-3 bg-slate-900/60">
               {!isAlert && (
@@ -177,4 +181,3 @@ export const useConfirmDialog = () => {
   }
   return ctx;
 };
-

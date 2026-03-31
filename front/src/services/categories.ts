@@ -75,3 +75,10 @@ export const fetchCategoryLogs = async (id: string | number) => {
   const res = await api.get(`/api/inventory/medicine-categories/${id}/logs/`);
   return (res.data?.results || []) as Log[];
 };
+
+export const deleteCategory = async (id: string | number) => {
+  const res = await api.delete(
+    `/api/inventory/medicine-categories/${id}/delete/`,
+  );
+  return res.data as { message?: string };
+};

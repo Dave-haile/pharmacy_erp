@@ -9,6 +9,14 @@ export default function Header() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  // is mobile components
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsMobileOpen(window.innerWidth < 768);
+    window.addEventListener("resize", handler);
+    return () => window.removeEventListener("resize", handler);
+  }, []);
 
   useEffect(() => {
     const handler = () => setScrolled(window.scrollY > 20);
@@ -18,18 +26,15 @@ export default function Header() {
 
   return (
     <nav
-      className={`fixed z-50 top-0 inset-x-0 px-6 lg:px-10 py-4 flex justify-between items-center pointer-events-none transition-all duration-500 ${scrolled
-        ? "bg-bg-base/80 backdrop-blur-xl border-b border-white/10"
-        : ""
-        }`}
+      className={`fixed z-50 top-0 inset-x-0 px-6 lg:px-10 py-4 flex justify-between items-center pointer-events-none transition-all duration-500 ${
+        scrolled
+          ? "bg-bg-base/80 backdrop-blur-xl border-b border-white/10"
+          : ""
+      }`}
     >
       {/* Logo */}
       <div className="pointer-events-auto flex items-center gap-3">
-        <AppLogo
-          size={32}
-          text="PharmaERP"
-          className="text-foreground"
-        />
+        <AppLogo size={32} text="PharmaERP" className="text-foreground" />
       </div>
       {/* Nav links (desktop) */}
       <div className="hidden md:flex pointer-events-auto items-center gap-1 px-2 py-1.5 rounded-full glass border border-foreground/5 dark:border-foreground/10">
@@ -99,28 +104,30 @@ export default function Header() {
           ) : (
             <button
               onClick={() => navigate("/login")}
-                className="text-sm font-bold text-muted hover:text-foreground transition-colors cursor-pointer"
+              className="text-sm font-bold text-muted hover:text-foreground transition-colors cursor-pointer"
             >
               Sign In
             </button>
           )}
 
-          <Link
-            to="#demo"
-            className="flex items-center gap-2 text-sm font-semibold text-white bg-slate-900 dark:bg-emerald-600 px-5 py-2.5 rounded-full hover:bg-slate-800 dark:hover:bg-emerald-500 transition-all shadow-sm"
-          >
-            Request Demo
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
+          {!isMobileOpen && (
+            <Link
+              to="#demo"
+              className="flex items-center gap-2 text-sm font-semibold text-white bg-slate-900 dark:bg-emerald-600 px-5 py-2.5 rounded-full hover:bg-slate-800 dark:hover:bg-emerald-500 transition-all shadow-sm"
             >
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          </Link>
+              Request Demo
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+              >
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </Link>
+          )}
         </div>
       </div>
     </nav>

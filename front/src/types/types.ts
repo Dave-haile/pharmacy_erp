@@ -12,6 +12,49 @@ export interface User {
   role: UserRole;
 }
 
+export type ManagedUserRole = "admin" | "manager" | "pharmacist" | "cashier";
+
+export interface ManagedUser {
+  id: number;
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: ManagedUserRole;
+  is_staff: boolean;
+  is_active: boolean;
+  date_joined: string;
+  updated_at: string;
+}
+
+export interface UserFilters {
+  email?: string;
+  name?: string;
+  role?: string;
+  is_active?: string;
+}
+
+export interface CreateManagedUserPayload {
+  email: string;
+  first_name: string;
+  last_name: string;
+  role: ManagedUserRole;
+  password: string;
+  is_active: boolean;
+}
+
+export interface UpdateManagedUserPayload {
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  role?: ManagedUserRole;
+  is_active?: boolean;
+}
+
+export interface ResetManagedUserPasswordPayload {
+  current_password?: string;
+  new_password: string;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   user: User | null;
