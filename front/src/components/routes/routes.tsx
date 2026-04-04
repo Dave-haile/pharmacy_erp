@@ -12,7 +12,7 @@ import StockEntry from "@/src/pages/stock-entries/StockEntry";
 import LandingPage from "@/src/pages/Landing/LandingPage";
 import { RouteGuard } from "../common/RouteGuard";
 import NotFound from "@/src/pages/NotFound";
-import AuditLogs from "../../pages/Logs/AuditLogs";
+import AuditLogs from "@/src/pages/Logs/AuditLogs";
 import SupplierRegistry from "@/src/pages/suppliers/SupplierRegistry";
 import SupplierForm from "@/src/pages/suppliers/SupplierForm";
 import SupplierDetails from "@/src/pages/suppliers/SupplierDetails";
