@@ -7,7 +7,10 @@ import React, {
   useState,
 } from "react";
 import axios from "axios";
-import api from "../services/api";
+import api, {
+  clearStoredAccessToken,
+  setStoredAccessToken,
+} from "../services/api";
 import { useToast } from "../hooks/useToast";
 
 export type BackendUserRole = "admin" | "manager" | "pharmacist" | "cashier";
@@ -67,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthCheckError(null);
     } catch (error) {
       if (isUnauthorizedAuthError(error)) {
+        clearStoredAccessToken();
         setUser(null);
         setAuthCheckError(null);
       } else {
@@ -84,13 +88,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (email: string, password: string) => {
       try {
-        const response = await api.post(
-          "/api/login/",
-          { email, password },
-          { withCredentials: true },
-        );
+        const response = await api.post<{
+          message: string;
+          access_token?: string;
+          token_type?: string;
+          expires_at?: string;
+        }>("/api/login/", { email, password });
 
         console.log("Login response:", response);
+
+        const accessToken = response.data.access_token;
+        if (accessToken) {
+          setStoredAccessToken(accessToken);
+        }
 
         await refreshMe();
       } catch (err) {
@@ -108,9 +118,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
-      const response = await api.post("/api/logout/", undefined, { withCredentials: true });
+      const response = await api.post("/api/logout/");
       console.log(response);
     } finally {
+      clearStoredAccessToken();
       setUser(null);
       setAuthCheckError(null);
     }
