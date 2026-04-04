@@ -10,6 +10,11 @@ import {
   X,
 } from "lucide-react";
 
+import {
+  FormField,
+  SelectInput,
+  TextInput,
+} from "../../components/ui/FormField";
 import { useAuth } from "../../auth/AuthContext";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { useToast } from "../../hooks/useToast";
@@ -147,77 +152,69 @@ const UserCreate: React.FC = () => {
         className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900"
       >
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              <UserRound className="h-3 w-3" />
-              <span>First Name</span>
-            </label>
-            <input
+          <FormField
+            label="First Name"
+            icon={<UserRound className="h-3 w-3" />}
+            required
+          >
+            <TextInput
               name="first_name"
               value={formData.first_name}
               onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               placeholder="Amina"
             />
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              <UserRound className="h-3 w-3" />
-              <span>Last Name</span>
-            </label>
-            <input
+          </FormField>
+          <FormField
+            label="Last Name"
+            icon={<UserRound className="h-3 w-3" />}
+            required
+          >
+            <TextInput
               name="last_name"
               value={formData.last_name}
               onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               placeholder="Tesfaye"
             />
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              <Mail className="h-3 w-3" />
-              <span>Email</span>
-            </label>
-            <input
+          </FormField>
+          <FormField label="Email" icon={<Mail className="h-3 w-3" />} required>
+            <TextInput
               name="email"
               type="email"
               value={formData.email}
               onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               placeholder="user@pharmaflow.com"
             />
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              <Shield className="h-3 w-3" />
-              <span>Role</span>
-            </label>
-            <select
+          </FormField>
+          <FormField
+            label="Role"
+            icon={<Shield className="h-3 w-3" />}
+            required
+          >
+            <SelectInput
               name="role"
               value={formData.role}
               onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
             >
               <option value="admin">Admin</option>
               <option value="manager">Manager</option>
               <option value="pharmacist">Pharmacist</option>
               <option value="cashier">Cashier</option>
-            </select>
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              <KeyRound className="h-3 w-3" />
-              <span>Temporary Password</span>
-            </label>
-            <input
+            </SelectInput>
+          </FormField>
+          <FormField
+            label="Temporary Password"
+            icon={<KeyRound className="h-3 w-3" />}
+            required
+            className="md:col-span-2"
+          >
+            <TextInput
               name="password"
               type="password"
               value={formData.password}
               onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               placeholder="Minimum 8 characters"
             />
-          </div>
+          </FormField>
           <div className="flex items-end">
             <label className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition-all hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 cursor-pointer">
               <input

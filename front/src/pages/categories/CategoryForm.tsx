@@ -3,6 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { ChevronLeft, FolderTree, Save, Text, X } from "lucide-react";
 
 import SearchableSelect from "../../components/SearchableSelect";
+import {
+  FormField,
+  TextAreaInput,
+  TextInput,
+} from "../../components/ui/FormField";
 import { useToast } from "../../hooks/useToast";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { createCategory } from "../../services/categories";
@@ -113,39 +118,36 @@ const CategoryForm: React.FC = () => {
         className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900"
       >
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          <div className="space-y-2">
-            <label className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              <FolderTree className="h-3 w-3" />
-              <span>Category Name</span>
-            </label>
-            <input
+          <FormField
+            label="Category Name"
+            icon={<FolderTree className="h-3 w-3" />}
+            required
+          >
+            <TextInput
               name="name"
               value={formData.name}
               onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               placeholder="e.g. Antibiotics"
             />
-          </div>
-          <div className="space-y-2">
-            <label className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              <Text className="h-3 w-3" />
-              <span>Alternative Name</span>
-            </label>
-            <input
+          </FormField>
+          <FormField
+            label="Alternative Name"
+            icon={<Text className="h-3 w-3" />}
+          >
+            <TextInput
               name="category_name"
               value={formData.category_name}
               onChange={handleChange}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
               placeholder="Optional display alias"
             />
-          </div>
+          </FormField>
         </div>
 
-        <div className="mt-6 space-y-2">
-          <label className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-            <FolderTree className="h-3 w-3" />
-            <span>Parent Category</span>
-          </label>
+        <FormField
+          label="Parent Category"
+          icon={<FolderTree className="h-3 w-3" />}
+          className="mt-6"
+        >
           <SearchableSelect
             options={itemGroups}
             value={
@@ -164,22 +166,21 @@ const CategoryForm: React.FC = () => {
             className="w-full"
             triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
           />
-        </div>
+        </FormField>
 
-        <div className="mt-6 space-y-2">
-          <label className="flex items-center space-x-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-            <Text className="h-3 w-3" />
-            <span>Description</span>
-          </label>
-          <textarea
+        <FormField
+          label="Description"
+          icon={<Text className="h-3 w-3" />}
+          className="mt-6"
+        >
+          <TextAreaInput
             name="description"
             value={formData.description}
             onChange={handleChange}
             rows={5}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium outline-none transition-all focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-800 dark:text-white"
             placeholder="Category purpose, included items, and notes..."
           />
-        </div>
+        </FormField>
 
         <div className="mt-8 flex items-center justify-end gap-3">
           <button

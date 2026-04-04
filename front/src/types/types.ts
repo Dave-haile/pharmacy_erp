@@ -87,6 +87,7 @@ export interface InventoryBatchItem {
   id: number;
   batch_id: number;
   batch_number: string;
+  inventory_batch_number: string;
   medicine_id: number;
   medicine_name: string;
   generic_name: string;

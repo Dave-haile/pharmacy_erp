@@ -40,6 +40,18 @@ import GrnDetails from "@/src/pages/purchasing/GrnDetails";
 import UserRegistry from "@/src/pages/users/UserRegistry";
 import UserCreate from "@/src/pages/users/UserCreate";
 import UserDetailsByEmail from "@/src/pages/users/UserDetailsByEmail";
+import HRHub from "@/src/pages/Hub/HRhub";
+import DepartmentDetails from "@/src/pages/HR/DepartmentDetails";
+import DepartmentForm from "@/src/pages/HR/DepartmentForm";
+import DepartmentRegistry from "@/src/pages/HR/DepartmentRegistry";
+import EmployeeRegistry from "@/src/pages/HR/EmployeeRegistry";
+import EmployeeEditor from "@/src/pages/HR/EmployeeEditor";
+import {
+  Attendance,
+  LeaveManagement,
+  Payroll,
+  Performance,
+} from "@/src/pages/Leave/HRSubModules";
 interface RouteConfig {
   key: string;
   name: string;
@@ -458,6 +470,127 @@ const routes: RouteConfig[] = [
     element: (
       <RouteGuard>
         <UserDetailsByEmail />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr",
+    name: "HR",
+    path: "/hr",
+    element: (
+      <RouteGuard>
+        <HRHub />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-departments",
+    name: "Departments",
+    path: "/hr/departments",
+    element: (
+      <RouteGuard>
+        <DepartmentRegistry />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-departments-new",
+    name: "Department New",
+    path: "/hr/departments/new",
+    element: (
+      <RouteGuard>
+        <DepartmentForm />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-departments-details",
+    name: "Department Details",
+    path: "/hr/departments/:departmentId",
+    element: (
+      <RouteGuard>
+        <DepartmentDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-employee",
+    name: "Employee",
+    path: "/hr/employees",
+    element: (
+      <RouteGuard>
+        <EmployeeRegistry />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-employee-new",
+    name: "Employee New",
+    path: "/hr/employees/new",
+    element: (
+      <RouteGuard>
+        <EmployeeEditor />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-employee-details",
+    name: "Employee Details",
+    path: "/hr/employees/:naming_series",
+    element: (
+      <RouteGuard>
+        <EmployeeEditor />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-leave",
+    name: "Leave",
+    path: "/hr/leave",
+    element: (
+      <RouteGuard>
+        <LeaveManagement />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-attendance",
+    name: "Attendance",
+    path: "/hr/attendance",
+    element: (
+      <RouteGuard>
+        <Attendance />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-performance",
+    name: "Performance",
+    path: "/hr/performance",
+    element: (
+      <RouteGuard>
+        <Performance />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-payroll",
+    name: "Payroll",
+    path: "/hr/payroll",
+    element: (
+      <RouteGuard>
+        <Payroll />
       </RouteGuard>
     ),
     visible: false,

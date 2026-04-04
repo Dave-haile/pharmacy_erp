@@ -1,8 +1,6 @@
 # pharmacy_erp/tables/modle/naming_series.py
 
-from django.db import models
-from django.db import transaction
-from django.core.exceptions import ValidationError
+from django.db import IntegrityError, models, transaction
 
 class MedicineNamingSeries(models.Model):
     """
@@ -28,6 +26,10 @@ class MedicineNamingSeries(models.Model):
     
     def __str__(self):
         return f"{self.prefix}-{self.year}-{self.current_number:04d}"
+
+    @classmethod
+    def build_series_name(cls, prefix, year):
+        return f"{prefix.lower()}_series_{year}"
     
     @classmethod
     @transaction.atomic
@@ -40,21 +42,33 @@ class MedicineNamingSeries(models.Model):
         
         current_year = timezone.now().year
         prefix = prefix or cls.PREFIX
+        series_name = cls.build_series_name(prefix, current_year)
         
-        # Try to get existing series for current year
-        series, created = cls.objects.get_or_create(
+        series = cls.objects.select_for_update().filter(
             prefix=prefix,
             year=current_year,
-            defaults={'current_number': 0}
-        )
-        
-        if not created:
-            # Lock and update the existing series
-            series = cls.objects.select_for_update().get(id=series.id)
-            series.current_number += 1
+        ).first()
+
+        if series is None:
+            try:
+                series = cls.objects.create(
+                    prefix=prefix,
+                    year=current_year,
+                    series_name=series_name,
+                    current_number=1,
+                )
+            except IntegrityError:
+                # Another request created the same prefix/year series first.
+                series = cls.objects.select_for_update().get(
+                    prefix=prefix,
+                    year=current_year,
+                )
+                series.current_number += 1
         else:
-            # New series, start from 1
-            series.current_number = 1
+            series.current_number += 1
+
+        if series.series_name != series_name:
+            series.series_name = series_name
         
         series.save()
         
