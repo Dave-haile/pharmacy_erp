@@ -135,9 +135,8 @@ const CategorySection: React.FC<SectionProps> = ({
 
 const InventoryHub: React.FC = () => {
   const navigate = useNavigate();
-  const [hubSummary, setHubSummary] = useState<InventoryHubSummaryResponse | null>(
-    null,
-  );
+  const [hubSummary, setHubSummary] =
+    useState<InventoryHubSummaryResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -287,6 +286,11 @@ const InventoryHub: React.FC = () => {
           highlighted: true,
         },
         {
+          label: "Inventory Control Summary",
+          path: "/inventory/inventory-control-report",
+          highlighted: true,
+        },
+        {
           label: "Sales Summary",
           path: "/inventory/sales-summary",
           highlighted: true,
@@ -420,9 +424,23 @@ const InventoryHub: React.FC = () => {
                 >
                   <AreaChart data={inventoryValueTrend}>
                     <defs>
-                      <linearGradient id="valueGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                      <linearGradient
+                        id="valueGrad"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#6366f1"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#6366f1"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
                     <Area
@@ -434,7 +452,9 @@ const InventoryHub: React.FC = () => {
                     />
                     <XAxis dataKey="month" hide />
                     <Tooltip
-                      formatter={(value: number) => currencyCompact.format(value)}
+                      formatter={(value: number) =>
+                        currencyCompact.format(value)
+                      }
                       contentStyle={{
                         borderRadius: "8px",
                         border: "none",
@@ -499,7 +519,10 @@ const InventoryHub: React.FC = () => {
               </div>
               <div className="space-y-1.5 ml-2 pr-2">
                 {stockDistribution.map((item) => (
-                  <div key={item.name} className="flex items-center space-x-1.5">
+                  <div
+                    key={item.name}
+                    className="flex items-center space-x-1.5"
+                  >
                     <div
                       className="w-1.5 h-1.5 rounded-full shrink-0"
                       style={{ backgroundColor: item.color }}

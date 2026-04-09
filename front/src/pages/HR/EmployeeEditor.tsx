@@ -435,7 +435,21 @@ const EmployeeEditor: React.FC = () => {
   };
 
   const handlePrintProfile = () => {
-    window.print();
+    if (!employee) return;
+
+    navigate(`/print/employee/${employee.naming_series}`, {
+      state: {
+        documentData: employee,
+        documentTitle: employee.full_name,
+        documentSubtitle: "Employee profile print preview.",
+        documentMeta: [
+          { label: "Department", value: employee.department },
+          { label: "Designation", value: employee.designation },
+          { label: "Status", value: employee.status_label },
+          { label: "Active", value: employee.is_active },
+        ],
+      },
+    });
   };
 
   const handleShareRecord = async () => {

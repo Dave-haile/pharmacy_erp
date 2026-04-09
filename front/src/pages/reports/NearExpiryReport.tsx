@@ -3,13 +3,19 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import DataTable, { Column } from "../../components/DataTable";
 import { useToast } from "../../hooks/useToast";
 import { fetchNearExpiryReport } from "../../services/reports";
-import { DocumentHeader, DocumentPage, DocumentSummaryCard } from "../../components/common/DocumentUI";
+import {
+  DocumentHeader,
+  DocumentPage,
+  DocumentSummaryCard,
+} from "../../components/common/DocumentUI";
+import { useNavigate } from "react-router-dom";
 
 type Row = Awaited<ReturnType<typeof fetchNearExpiryReport>>["results"][number];
 
 const NearExpiryReport: React.FC = () => {
   const { showError } = useToast();
   const [days, setDays] = useState(30);
+  const navigate = useNavigate();
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["report-near-expiry", days],
@@ -73,8 +79,10 @@ const NearExpiryReport: React.FC = () => {
   return (
     <DocumentPage>
       <DocumentHeader
+        eyebrow="Inventory Control"
         title="Near-Expiry Report"
-        subtitle="Batches expiring soon (sell first / quarantine planning)."
+        onBack={() => navigate(-1)}
+        description="Batches expiring soon (sell first / quarantine planning)."
         actions={
           <select
             value={days}
@@ -108,4 +116,3 @@ const NearExpiryReport: React.FC = () => {
 };
 
 export default NearExpiryReport;
-

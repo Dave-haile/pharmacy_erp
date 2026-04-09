@@ -4,11 +4,6 @@ import MainLayout from "./MainLayout";
 import { useAuth } from "@/src/auth/AuthContext";
 import ErrorPage from "@/src/components/ErrorPage";
 
-interface RouteGuardProps {
-  children: React.ReactNode;
-}
-
-// Please add the pages that can be accessed without logging in to PUBLIC_ROUTES.
 const PUBLIC_ROUTES = ["/login", "/403", "/404", "/"];
 
 function matchPublicRoute(path: string, patterns: string[]) {
@@ -21,16 +16,13 @@ function matchPublicRoute(path: string, patterns: string[]) {
   });
 }
 
-export function RouteGuard({ children }: RouteGuardProps) {
+export const RouteGuard: React.FC<{
+  children: React.ReactNode;
+  fullWidth?: boolean;
+}> = ({ children, fullWidth = false }) => {
   const { user, loading, authCheckError, refreshMe } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const isItemDetailsRoute = /^\/inventory\/medicines\/[^/]+$/.test(
-    location.pathname,
-  );
-  const isSupplierDetailsRoute = /^\/inventory\/suppliers\/\d+$/.test(
-    location.pathname,
-  );
 
   useEffect(() => {
     if (loading) return;
@@ -72,9 +64,9 @@ export function RouteGuard({ children }: RouteGuardProps) {
     return null;
   }
 
-  return (
-    <MainLayout fullWidth={isItemDetailsRoute || isSupplierDetailsRoute}>
-      {children}
-    </MainLayout>
-  );
-}
+  if (fullWidth) {
+    return <>{children}</>;
+  }
+
+  return <MainLayout>{children}</MainLayout>;
+};

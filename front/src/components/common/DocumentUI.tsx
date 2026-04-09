@@ -1,6 +1,11 @@
 import React, { ReactNode } from "react";
 
 type AccentTone = "emerald" | "blue" | "amber" | "slate";
+export type DocumentSelectTriggerProps = {
+  children: ReactNode;
+  className?: string;
+  label?: string;
+};
 
 const accentClassMap: Record<AccentTone, string> = {
   emerald: "from-emerald-500/90 via-emerald-500/70 to-emerald-400/60",
@@ -20,7 +25,8 @@ const summaryToneMap: Record<AccentTone, string> = {
 };
 
 export const documentInputClassName =
-  "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none shadow-sm transition-all placeholder:text-slate-400 focus:border-emerald-500/70 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-600 dark:focus:bg-slate-950";
+  "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all";
+// "w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-900 outline-none shadow-sm transition-all placeholder:text-slate-400 focus:border-emerald-500/70 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-600 dark:focus:bg-slate-950";
 export const documentSearchInputClassName =
   "w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900 outline-none shadow-sm transition-all placeholder:text-slate-400 focus:border-emerald-500/70 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 dark:border-slate-800 dark:bg-slate-950 dark:text-white dark:placeholder:text-slate-600 dark:focus:bg-slate-950";
 
@@ -209,5 +215,20 @@ export const DocumentSummaryCard: React.FC<DocumentSummaryCardProps> = ({
         {hint}
       </p>
     )}
+  </div>
+);
+
+export const DocumentSelectTrigger: React.FC<DocumentSelectTriggerProps> = ({
+  children,
+  className = "",
+  label,
+}) => (
+  <div className={`${className} relative`.trim()}>
+    {label && (
+      <span className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
+        {label}
+      </span>
+    )}
+    {children}
   </div>
 );

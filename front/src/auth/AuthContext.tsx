@@ -95,8 +95,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           expires_at?: string;
         }>("/api/login/", { email, password });
 
-        console.log("Login response:", response);
-
         const accessToken = response.data.access_token;
         if (accessToken) {
           setStoredAccessToken(accessToken);

@@ -1,11 +1,12 @@
 # Re-export models so Django discovers them (Django looks for app.models)
-from tables.modle import (
+from tables.model_definitions import (
     Category,
     Inventory,
     Medicine,
     MedicineNamingSeries,
     Purchase,
     PurchaseItem,
+    PrintFormat,
     Sale,
     SaleItem,
     Supplier,
@@ -23,4 +24,8 @@ from tables.modle import (
     SalesReturnItem,
     SupplierReturn,
     SupplierReturnItem,
+    CostLayer,
+    InventoryValuation,
+    SystemConfig,
+    TableRegistry,
 )

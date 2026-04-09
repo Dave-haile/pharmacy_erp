@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,18 +23,40 @@ type SortConfig = {
 
 const CategoryRegistry: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showError } = useToast();
   const [parentSearch, setParentSearch] = useState("");
-  const [filters, setFilters] = useState<CategoryFilters>({
-    name: "",
-    description: "",
-    parent_category: "",
-  });
+
+  // Initialize filters from URL query params
+  const [filters, setFilters] = useState<CategoryFilters>(() => ({
+    name: searchParams.get("name") || "",
+    description: searchParams.get("description") || "",
+    parent_category: searchParams.get("parent_category") || "",
+  }));
+
   const [debouncedFilters, setDebouncedFilters] =
     useState<CategoryFilters>(filters);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // Initialize currentPage from URL query params
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get("page");
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  });
+
   const [pageSize, setPageSize] = useState(10);
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
+
+  // Update URL when filters or page change
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (filters.name) params.set("name", filters.name);
+    if (filters.description) params.set("description", filters.description);
+    if (filters.parent_category) params.set("parent_category", filters.parent_category);
+    if (currentPage > 1) params.set("page", String(currentPage));
+
+    setSearchParams(params, { replace: true });
+  }, [filters, currentPage, setSearchParams]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {

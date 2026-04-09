@@ -390,7 +390,7 @@ const StockEntryPage: React.FC = () => {
             (error.response as { data?: { error?: string; message?: string } })
               ?.data?.message
           : "Failed to save stock entry.";
-      showError(message);
+      showError(message || "Failed to save stock entry.");
     } finally {
       setIsSubmitting(false);
     }
@@ -405,7 +405,7 @@ const StockEntryPage: React.FC = () => {
         "This will change the document status from Draft to Posted. Continue?",
       confirmLabel: "Post Entry",
       cancelLabel: "Cancel",
-      variant: "info",
+      variant: "default",
     });
 
     if (!confirmed) return;
@@ -432,7 +432,7 @@ const StockEntryPage: React.FC = () => {
             (error.response as { data?: { error?: string; message?: string } })
               ?.data?.message
           : "Failed to post stock entry.";
-      showError(message);
+      showError(message || "Failed to post stock entry.");
     } finally {
       setIsPosting(false);
     }
@@ -474,7 +474,7 @@ const StockEntryPage: React.FC = () => {
             (error.response as { data?: { error?: string; message?: string } })
               ?.data?.message
           : "Failed to cancel stock entry.";
-      showError(message);
+      showError(message || "Failed to cancel stock entry.");
     } finally {
       setIsCancelling(false);
     }
@@ -504,7 +504,8 @@ const StockEntryPage: React.FC = () => {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (!postingNumber || isNewEntry) return;
+    navigate(`/print/stock-entry/${postingNumber}`);
     setIsActionsOpen(false);
   };
 
@@ -590,7 +591,7 @@ const StockEntryPage: React.FC = () => {
         mode: "alert",
         variant: "danger",
         title: "Cannot Delete Stock Entry",
-        message,
+        message: message || "Failed to delete stock entry.",
         confirmLabel: "OK",
       });
     } finally {

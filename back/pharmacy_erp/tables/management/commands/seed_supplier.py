@@ -1,7 +1,7 @@
 
 
 from django.core.management.base import BaseCommand
-from tables.modle import Supplier
+from tables.model_definitions import Supplier
 
 
 class Command(BaseCommand):

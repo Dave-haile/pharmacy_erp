@@ -56,6 +56,7 @@ const MedicineDetails: React.FC = () => {
 
   useEffect(() => {
     const fetchItem = async () => {
+      if (!naming_series) return;
       try {
         const data = await fetchMedicineById(naming_series);
         setItem(data);
@@ -322,11 +323,23 @@ const MedicineDetails: React.FC = () => {
     if (!item) return;
   };
 
-  const handlePrint = async () => {
+  const handlePrint = () => {
     if (!item) return;
-    // const response = await printMedicine(item.id);
-    // setItem((prev) => (prev ? { ...prev, ...response } : response));
-    // showSuccess(response.message || "Item printed successfully");
+    navigate(`/print/medicine/${item.naming_series}`, {
+      state: {
+        documentData: item,
+        documentTitle: item.name,
+        documentSubtitle:
+          item.generic_name?.trim() || "Medicine master record print preview.",
+        documentMeta: [
+          { label: "Status", value: item.status },
+          { label: "Category", value: item.category },
+          { label: "Supplier", value: item.supplier },
+          { label: "Active", value: item.is_active },
+        ],
+      },
+    });
+    setIsActionsOpen(false);
   };
 
   const handleShare = async () => {
@@ -582,11 +595,11 @@ const MedicineDetails: React.FC = () => {
                       <input
                         type="checkbox"
                         name="is_active"
-                        checked={!!editForm.is_active}
+                        checked={!!editForm?.is_active}
                         onChange={handleInputChange}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
                     </div>
                   </label>
                 </div>
@@ -610,7 +623,7 @@ const MedicineDetails: React.FC = () => {
                       <div className="relative">
                         <input
                           name="name"
-                          value={editForm.name || ""}
+                          value={editForm?.name || ""}
                           onChange={handleInputChange}
                           placeholder="e.g. Paracetamol 500mg"
                           className="w-full bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm font-bold outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700"
@@ -627,7 +640,7 @@ const MedicineDetails: React.FC = () => {
                       </label>
                       <input
                         name="barcode"
-                        value={editForm.barcode || editForm.sku || ""}
+                        value={editForm?.barcode || ""}
                         onChange={handleInputChange}
                         placeholder="Scan or enter ID"
                         className="w-full bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3.5 text-sm font-mono font-bold outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
@@ -654,7 +667,7 @@ const MedicineDetails: React.FC = () => {
                         <SearchableSelect
                           options={itemGroups}
                           value={
-                            editForm.category_id != null
+                            editForm?.category_id != null
                               ? String(editForm.category_id)
                               : ""
                           }
@@ -684,7 +697,7 @@ const MedicineDetails: React.FC = () => {
                       <SearchableSelect
                         options={supplierGroups}
                         value={
-                          editForm.supplier_id != null
+                          editForm?.supplier_id != null
                             ? String(editForm.supplier_id)
                             : ""
                         }
@@ -730,7 +743,7 @@ const MedicineDetails: React.FC = () => {
                           name="cost_price"
                           type="number"
                           step="0.01"
-                          value={editForm.cost_price || ""}
+                          value={editForm?.cost_price || ""}
                           onChange={handleInputChange}
                           className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-4 py-3.5 text-sm font-black outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all"
                         />
@@ -739,21 +752,17 @@ const MedicineDetails: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center space-x-2">
                         <DollarSign className="w-3 h-3" />
-                        <span>Market Price (USD)</span>
+                        <span>Market Price (Br)</span>
                       </label>
                       <div className="relative group">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black group-focus-within:text-blue-500 transition-colors">
-                          $
+                          Br
                         </span>
                         <input
                           name="selling_price"
                           type="number"
                           step="0.01"
-                          value={
-                            editForm.selling_price ||
-                            editForm.valuation?.replace("$", "") ||
-                            ""
-                          }
+                          value={editForm?.selling_price || ""}
                           onChange={handleInputChange}
                           className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-4 py-3.5 text-sm font-black outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
@@ -777,7 +786,7 @@ const MedicineDetails: React.FC = () => {
                     </label>
                     <textarea
                       name="description"
-                      value={editForm.description || ""}
+                      value={editForm?.description || ""}
                       onChange={handleInputChange}
                       rows={5}
                       placeholder="Enter detailed specifications, storage requirements, or handling instructions..."
@@ -788,13 +797,7 @@ const MedicineDetails: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div
-              key="view-mode"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="space-y-8"
-            >
+            <div key="view-mode" className="space-y-8">
               {/* Visual Stats Bar */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm group hover:border-emerald-500/30 transition-colors">
@@ -812,9 +815,13 @@ const MedicineDetails: React.FC = () => {
                     Margin
                   </p>
                   <p className="text-2xl font-black text-blue-600 dark:text-blue-400 tracking-tight">
-                    {item.cost_price && item.selling_price
-                      ? `${Math.round(((item.selling_price - item.cost_price) / item.selling_price) * 100)}%`
-                      : "--"}
+                    {(() => {
+                      const costPrice = Number(item.cost_price);
+                      const sellingPrice = Number(item.selling_price);
+                      return costPrice && sellingPrice && sellingPrice > 0
+                        ? `${Math.round(((sellingPrice - costPrice) / sellingPrice) * 100)}%`
+                        : "--";
+                    })()}
                   </p>
                 </div>
                 <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm group hover:border-emerald-500/30 transition-colors">
@@ -870,7 +877,7 @@ const MedicineDetails: React.FC = () => {
                       <span>Barcode / SKU</span>
                     </label>
                     <p className="text-base font-mono font-bold text-slate-800 dark:text-slate-200">
-                      {item.barcode || item.sku || "---"}
+                      {item.barcode || "---"}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -879,7 +886,7 @@ const MedicineDetails: React.FC = () => {
                       <span>Category</span>
                     </label>
                     <p className="text-base font-bold text-slate-800 dark:text-slate-200">
-                      {item.category || item.group}
+                      {item.category || "Uncategorized"}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -888,7 +895,7 @@ const MedicineDetails: React.FC = () => {
                       <span>Supplier</span>
                     </label>
                     <p className="text-base font-bold text-slate-800 dark:text-slate-200">
-                      {item.supplier || item.manufacturer || "Not Specified"}
+                      {item.supplier || "Not Specified"}
                     </p>
                   </div>
                   <div className="space-y-1">
@@ -995,7 +1002,7 @@ const MedicineDetails: React.FC = () => {
                         <div key={log.log_id} className="relative pl-8 group">
                           {/* Timeline Line */}
                           {idx < logs.length - 1 && (
-                            <div className="absolute left-[11px] top-6 bottom-0 w-px bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-500/20 transition-colors" />
+                            <div className="absolute left-2.75 top-6 bottom-0 w-px bg-slate-100 dark:bg-slate-800 group-hover:bg-emerald-500/20 transition-colors" />
                           )}
 
                           {/* Timeline Dot */}

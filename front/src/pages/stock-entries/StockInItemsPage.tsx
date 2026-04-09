@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import DataTable, { Column } from "../../components/DataTable";
 import { useToast } from "../../hooks/useToast";
@@ -25,22 +25,45 @@ const statusClassMap: Record<StockEntrySummary["status"], string> = {
 
 const StockInItemsPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showError } = useToast();
   const [supplierInputSearch, setSupplierInputSearch] = useState("");
   const [selectedSupplierValue, setSelectedSupplierValue] = useState("");
   const [pageSize, setPageSize] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // Initialize filters from URL query params
+  const [filters, setFilters] = useState(() => ({
+    posting_number: searchParams.get("posting_number") || "",
+    invoice_number: searchParams.get("invoice_number") || "",
+    supplier: searchParams.get("supplier") || "",
+    status: searchParams.get("status") || "",
+  }));
+
+  // Initialize currentPage from URL query params
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get("page");
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  });
+
   const [sortConfig, setSortConfig] = useState<{
     key: keyof StockEntrySummary;
     direction: "asc" | "desc";
   } | null>(null);
-  const [filters, setFilters] = useState({
-    posting_number: "",
-    invoice_number: "",
-    supplier: "",
-    status: "",
-  });
+
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
+
+  // Update URL when filters or page change
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (filters.posting_number) params.set("posting_number", filters.posting_number);
+    if (filters.invoice_number) params.set("invoice_number", filters.invoice_number);
+    if (filters.supplier) params.set("supplier", filters.supplier);
+    if (filters.status) params.set("status", filters.status);
+    if (currentPage > 1) params.set("page", String(currentPage));
+
+    setSearchParams(params, { replace: true });
+  }, [filters, currentPage, setSearchParams]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedFilters(filters), 300);

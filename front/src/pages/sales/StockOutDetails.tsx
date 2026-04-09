@@ -410,7 +410,7 @@ const StockOutDetails: React.FC = () => {
         eyebrow="Sales & Distribution"
         title={isNewEntry ? "Create Stock Out" : "Stock Out"}
         description="Issue medicine from inventory batches. Drafts can auto-allocate FIFO batches before posting."
-        onBack={() => navigate("/stock-outs")}
+        onBack={() => navigate(-1)}
         meta={
           <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
             Ref: {!isNewEntry && postingNumber ? postingNumber : "Auto"}
@@ -421,13 +421,7 @@ const StockOutDetails: React.FC = () => {
             {!isNewEntry && postingNumber && (
               <button
                 type="button"
-                onClick={() =>
-                  navigate(
-                    `/inventory/stock-outs/${postingNumber}/print${
-                      saleId ? `?id=${saleId}` : ""
-                    }`,
-                  )
-                }
+                onClick={() => navigate(`/print/stock-out/${postingNumber}`)}
                 className={documentSecondaryButtonClassName}
               >
                 Print
@@ -496,7 +490,9 @@ const StockOutDetails: React.FC = () => {
                 onToggle={() => setIsActionsOpen((prev) => !prev)}
                 onClose={() => setIsActionsOpen(false)}
                 onPrint={() => {
-                  window.print();
+                  if (postingNumber) {
+                    navigate(`/print/stock-out/${postingNumber}`);
+                  }
                   setIsActionsOpen(false);
                 }}
                 onDelete={() => {

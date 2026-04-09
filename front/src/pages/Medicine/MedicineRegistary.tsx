@@ -1,48 +1,120 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  ChevronDown,
+  Download,
+  FileJson,
+  FileSpreadsheet,
+  FileText,
+  Printer,
+  UploadCloud,
+} from "lucide-react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+
 import SearchableSelect from "../../components/SearchableSelect";
 import DataTable, { Column } from "../../components/DataTable";
 import { useToast } from "../../hooks/useToast";
-import { fetchMedicines } from "../../services/medicines";
-import { MedicineItem } from "../../types/types";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  exportMedicines,
+  fetchMedicines,
+  MedicineFilters,
+} from "../../services/medicines";
+import { MedicineItem, Supplier } from "../../types/types";
 import { useCategories } from "../../services/common";
 import { fetchSuppliers } from "../../services/suppler";
+
+const defaultFilters: MedicineFilters = {
+  name: "",
+  generic_name: "",
+  category: "",
+  supplier: "",
+  status: "",
+};
+
+type RegistryExportFormat = "csv" | "json" | "xlsx" | "pdf";
+
+const resolveDownloadFileName = (
+  contentDisposition: string | undefined,
+  fallback: string,
+) => {
+  if (!contentDisposition) return fallback;
+
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const simpleMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+  return simpleMatch?.[1] || fallback;
+};
+
+const downloadBlob = (blob: Blob, fileName: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+};
 
 const ItemMaster: React.FC = () => {
   const [categoryInputSearch, setCategoryInputSearch] = useState("");
   const [supplierInputSearch, setSupplierInputSearch] = useState("");
-  const [filters, setFilters] = useState<{
-    name: string;
-    generic_name: string;
-    category: string;
-    supplier: string;
-    status: string;
-  }>({
-    name: "",
-    generic_name: "",
-    category: "",
-    supplier: "",
-    status: "",
-  });
   const [pageSize, setPageSize] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState<{
-    key: string;
+    key: keyof MedicineItem;
     direction: "asc" | "desc";
   } | null>(null);
-  const navigate = useNavigate();
-  const { showError } = useToast();
+  const [debouncedFilters, setDebouncedFilters] =
+    useState<MedicineFilters>(defaultFilters);
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
-  const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Initialize filters from URL query params
+  const [filters, setFilters] = useState<MedicineFilters>(() => {
+    return {
+      name: searchParams.get("name") || "",
+      generic_name: searchParams.get("generic_name") || "",
+      category: searchParams.get("category") || "",
+      supplier: searchParams.get("supplier") || "",
+      status: searchParams.get("status") || "",
+    };
+  });
+
+  // Initialize currentPage from URL query params
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get("page");
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  });
+
+  // Update URL when filters or page change
+  useEffect(() => {
+    const params = new URLSearchParams();
+
+    if (filters.name) params.set("name", filters.name);
+    if (filters.generic_name) params.set("generic_name", filters.generic_name);
+    if (filters.category) params.set("category", filters.category);
+    if (filters.supplier) params.set("supplier", filters.supplier);
+    if (filters.status) params.set("status", filters.status);
+    if (currentPage > 1) params.set("page", String(currentPage));
+
+    setSearchParams(params, { replace: true });
+  }, [filters, currentPage, setSearchParams]);
+  const { showError, showInfo, showSuccess } = useToast();
 
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedFilters(filters);
-    }, 500); // wait 500ms
+    }, 500);
 
     return () => clearTimeout(handler);
   }, [filters]);
+
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["medicines", currentPage, pageSize, debouncedFilters],
     queryFn: () =>
@@ -67,7 +139,9 @@ const ItemMaster: React.FC = () => {
           (error.response as { data?: { error?: string; message?: string } })
             ?.data?.message
         : "Failed to fetch medicines. Please try again.";
-    showError(errorMessage);
+    showError(
+      errorMessage || "An unknown error occurred while fetching medicines.",
+    );
   }, [error, showError]);
 
   const { data: suppliersData } = useQuery({
@@ -78,7 +152,7 @@ const ItemMaster: React.FC = () => {
 
   const supplierGroups = React.useMemo(() => {
     return (
-      suppliersData?.results?.map((supplier) => ({
+      suppliersData?.results?.map((supplier: Supplier) => ({
         value: String(supplier.id),
         label: supplier.name,
         subtitle: `${supplier.phone} - ${supplier.email} - ${supplier.address}`,
@@ -104,25 +178,25 @@ const ItemMaster: React.FC = () => {
   ) => {
     const { name, value } = e.target;
     setFilters((prev) => ({ ...prev, [name]: value }));
-    setCurrentPage(1); // Reset to first page on filter change
+    setCurrentPage(1);
   };
 
   const handleCategoryChange = (value: string) => {
     setFilters((prev) => ({ ...prev, category: value }));
-    setCurrentPage(1); // Reset to first page on filter change
+    setCurrentPage(1);
   };
 
   const handleSupplierChange = (value: string) => {
     setFilters((prev) => ({ ...prev, supplier: value }));
-    setCurrentPage(1); // Reset to first page on filter change
+    setCurrentPage(1);
   };
 
   const handlePageSizeChange = (size: number) => {
     setPageSize(size);
-    setCurrentPage(1); // Reset to first page when page size changes
+    setCurrentPage(1);
   };
 
-  const requestSort = (key: string) => {
+  const requestSort = (key: keyof MedicineItem) => {
     let direction: "asc" | "desc" = "asc";
     if (
       sortConfig &&
@@ -132,6 +206,38 @@ const ItemMaster: React.FC = () => {
       direction = "desc";
     }
     setSortConfig({ key, direction });
+  };
+
+  const handleExport = async (format: RegistryExportFormat) => {
+    setIsExportMenuOpen(false);
+    setIsExporting(true);
+
+    try {
+      const { blob, contentDisposition } = await exportMedicines(format, {
+        ...filters,
+        include_inactive: true,
+      });
+      const fallbackName = `medicine-registry.${format}`;
+      downloadBlob(
+        blob,
+        resolveDownloadFileName(contentDisposition, fallbackName),
+      );
+
+      if (format === "pdf") {
+        showInfo("Downloaded the PDF export generated by the backend.");
+      } else {
+        showSuccess("Downloaded the export generated by the backend.");
+      }
+    } catch (exportError) {
+      console.error("Medicine export failed", exportError);
+      showError("Failed to export the filtered medicine records.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportClick = () => {
+    navigate("/inventory/medicines/import");
   };
 
   const { itemGroups } = useCategories(categoryInputSearch);
@@ -211,7 +317,7 @@ const ItemMaster: React.FC = () => {
       className: "text-right",
       render: (item) => (
         <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">
-          • {item.is_active ? "Active" : "Inactive"}
+          * {item.is_active ? "Active" : "Inactive"}
         </span>
       ),
     },
@@ -222,11 +328,38 @@ const ItemMaster: React.FC = () => {
     { label: "Submitted", value: "Submitted" },
   ];
 
+  const exportOptions: Array<{
+    key: RegistryExportFormat;
+    label: string;
+    icon: React.ReactNode;
+  }> = [
+    {
+      key: "csv",
+      label: "CSV",
+      icon: <FileText className="h-4 w-4" />,
+    },
+    {
+      key: "xlsx",
+      label: "Excel",
+      icon: <FileSpreadsheet className="h-4 w-4" />,
+    },
+    {
+      key: "json",
+      label: "JSON",
+      icon: <FileJson className="h-4 w-4" />,
+    },
+    {
+      key: "pdf",
+      label: "PDF",
+      icon: <Printer className="h-4 w-4" />,
+    },
+  ];
+
   const Filters = (
     <div className="grid grid-cols-2 gap-4 w-full items-start">
       <div className="flex-1">
         <div className="grid grid-cols-4 gap-3 min-w-max">
-          <div className="space-y-1.5 min-w-[160px]">
+          <div className="space-y-1.5 min-w-40">
             <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
               <input
                 type="text"
@@ -239,7 +372,7 @@ const ItemMaster: React.FC = () => {
               />
             </div>
           </div>
-          <div className="space-y-1.5 min-w-[140px]">
+          <div className="space-y-1.5 min-w-35">
             <div className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 flex items-center space-x-2 focus-within:border-emerald-500/50 transition-all">
               <input
                 type="text"
@@ -252,7 +385,7 @@ const ItemMaster: React.FC = () => {
               />
             </div>
           </div>
-          <div className="space-y-1.5 min-w-[170px]">
+          <div className="space-y-1.5 min-w-42.5">
             <SearchableSelect
               options={itemGroups}
               value={filters.category}
@@ -265,7 +398,7 @@ const ItemMaster: React.FC = () => {
               createNewText="Add New Medicine Category"
             />
           </div>
-          <div className="space-y-1.5 min-w-[170px]">
+          <div className="space-y-1.5 min-w-42.5">
             <SearchableSelect
               options={supplierGroups}
               value={filters.supplier}
@@ -278,7 +411,7 @@ const ItemMaster: React.FC = () => {
               createNewText="Add New Medicine Supplier"
             />
           </div>
-          <div className="space-y-1.5 min-w-[170px]">
+          <div className="space-y-1.5 min-w-42.5">
             <div className="relative">
               {!filters.status && (
                 <span className="pointer-events-none absolute left-3 top-1/2 z-1 -translate-y-1/2 text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">
@@ -325,37 +458,49 @@ const ItemMaster: React.FC = () => {
       </div>
       <div className="flex items-center justify-end">
         <div className="flex items-center space-x-2">
-          <button className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm">
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsExportMenuOpen((open) => !open)}
+              disabled={isExporting}
+              className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm disabled:opacity-60"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2.5"
-                d="M3 4.5h18m-18 7.5h18m-18 7.5h18"
-              />
-            </svg>
-            <span>Filter</span>
-          </button>
-          <button className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm">
-            <svg
-              className="w-3 h-3"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2.5"
-                d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
-              />
-            </svg>
-            <span>Last Updated</span>
+              <Download className="w-3 h-3" />
+              <span>{isExporting ? "Exporting" : "Export"}</span>
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {isExportMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setIsExportMenuOpen(false)}
+                  className="fixed inset-0 z-20 cursor-default"
+                />
+                <div className="absolute right-0 z-30 mt-2 w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+                  {exportOptions.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => {
+                        void handleExport(option.key);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-[11px] font-bold text-slate-600 transition-all hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                    >
+                      <span className="text-slate-400">{option.icon}</span>
+                      <span>Export {option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={handleImportClick}
+            className="flex items-center space-x-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest hover:text-slate-800 dark:hover:text-white hover:border-slate-300 dark:hover:border-slate-700 transition-all shadow-sm"
+          >
+            <UploadCloud className="w-3 h-3" />
+            <span>Import</span>
           </button>
         </div>
       </div>

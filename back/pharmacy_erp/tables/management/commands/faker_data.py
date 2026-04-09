@@ -5,7 +5,7 @@ import random
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from tables.modle import Supplier, Medicine, Inventory, Category
+from tables.model_definitions import Supplier, Medicine, Inventory, Category
 
 User = get_user_model()
 

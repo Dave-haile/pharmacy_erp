@@ -265,6 +265,24 @@ const DepartmentDetails: React.FC = () => {
     showSuccess("Department record exported.");
   };
 
+  const handlePrint = () => {
+    if (!department) return;
+
+    navigate(`/print/department/${department.id}`, {
+      state: {
+        documentData: department,
+        documentTitle: department.name,
+        documentSubtitle: "Department record print preview.",
+        documentMeta: [
+          { label: "Manager", value: department.manager_name || "-" },
+          { label: "Employees", value: department.employee_count ?? 0 },
+          { label: "Active", value: department.is_active },
+          { label: "Updated", value: department.updated_at },
+        ],
+      },
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -327,7 +345,7 @@ const DepartmentDetails: React.FC = () => {
             defaultActions={{
               onDuplicate: handleDuplicate,
               onCopyToClipboard: handleCopy,
-              onPrint: () => window.print(),
+              onPrint: handlePrint,
               onShareRecord: handleShareRecord,
               onExport: handleExport,
               onDelete: handleDelete,

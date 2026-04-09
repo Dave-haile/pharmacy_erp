@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import DataTable, { Column } from "../../components/DataTable";
 import { useToast } from "../../hooks/useToast";
@@ -9,9 +9,22 @@ import { DocumentHeader, DocumentPage } from "../../components/common/DocumentUI
 
 const PurchasesRegistry: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showError } = useToast();
   const [pageSize, setPageSize] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
+
+  // Initialize currentPage from URL query params
+  const [currentPage, setCurrentPage] = useState(() => {
+    const pageParam = searchParams.get("page");
+    return pageParam ? parseInt(pageParam, 10) : 1;
+  });
+
+  // Update URL when page changes
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (currentPage > 1) params.set("page", String(currentPage));
+    setSearchParams(params, { replace: true });
+  }, [currentPage, setSearchParams]);
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ["purchases", currentPage, pageSize],

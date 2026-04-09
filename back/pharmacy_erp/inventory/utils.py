@@ -1,6 +1,6 @@
 # pharmacy_erp/inventory/utils.py
 
-from tables.modle.naming_series import MedicineNamingSeries
+from tables.model_definitions.naming_series import MedicineNamingSeries
 
 def generate_medicine_naming_series(prefix=None):
     """

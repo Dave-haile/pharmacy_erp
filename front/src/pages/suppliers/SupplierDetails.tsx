@@ -364,7 +364,21 @@ const SupplierDetails: React.FC = () => {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (!supplier) return;
+
+    navigate(`/print/supplier/${supplier.naming_series || supplier.id}`, {
+      state: {
+        documentData: supplier,
+        documentTitle: supplier.name,
+        documentSubtitle: "Supplier master record print preview.",
+        documentMeta: [
+          { label: "Status", value: supplier.status || "Draft" },
+          { label: "Contact", value: supplier.contact_person || "-" },
+          { label: "Phone", value: supplier.phone || "-" },
+          { label: "Active", value: supplier.is_active },
+        ],
+      },
+    });
   };
 
   const handleShare = async () => {

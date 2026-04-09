@@ -584,3 +584,56 @@ export interface StockEntryDetailItem {
 export interface StockEntryDetail extends StockEntrySummary {
   items: StockEntryDetailItem[];
 }
+
+export type PrintDocumentType =
+  | "medicine"
+  | "supplier"
+  | "employee"
+  | "department"
+  | "category"
+  | "stock_entry"
+  | "stock_out"
+  | "stock_adjustment"
+  | "sales_return"
+  | "supplier_return"
+  | "purchase"
+  | "grn";
+
+export interface PrintFormat {
+  id: number;
+  document_type: PrintDocumentType;
+  document_type_label: string;
+  name: string;
+  slug: string;
+  template_key: string;
+  template_label: string;
+  description: string;
+  html_template: string;
+  css_template: string;
+  js_template: string;
+  has_custom_template: boolean;
+  paper_size: string;
+  orientation: "portrait" | "landscape";
+  is_active: boolean;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PrintFormatListResponse {
+  results: PrintFormat[];
+}
+
+export interface CreatePrintFormatPayload {
+  document_type: PrintDocumentType;
+  name: string;
+  slug?: string;
+  template_key: string;
+  description: string;
+  html_template: string;
+  css_template: string;
+  js_template: string;
+  paper_size: string;
+  orientation: "portrait" | "landscape";
+  is_default?: boolean;
+}

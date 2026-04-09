@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from rest_framework.decorators import api_view, parser_classes, permission_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
-from tables.modle.user_log import UserLog
+from tables.model_definitions.user_log import UserLog
 
 from hr.models import Department, Employee
 from hr.serializers import DepartmentSerializer, EmployeeSerializer

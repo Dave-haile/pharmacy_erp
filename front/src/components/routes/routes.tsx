@@ -18,8 +18,8 @@ import SupplierForm from "@/src/pages/suppliers/SupplierForm";
 import SupplierDetails from "@/src/pages/suppliers/SupplierDetails";
 import StockOutRegistry from "@/src/pages/sales/StockOutRegistry";
 import StockOutDetails from "@/src/pages/sales/StockOutDetails";
-import StockOutPrint from "@/src/pages/sales/StockOutPrint";
 import CreateMedicine from "@/src/pages/Medicine/CreateMedicine";
+import MedicineImportPage from "@/src/pages/Medicine/MedicineImportPage";
 import CategoryRegistry from "@/src/pages/categories/CategoryRegistry";
 import CategoryForm from "@/src/pages/categories/CategoryForm";
 import CategoryDetails from "@/src/pages/categories/CategoryDetails";
@@ -41,6 +41,7 @@ import UserRegistry from "@/src/pages/users/UserRegistry";
 import UserCreate from "@/src/pages/users/UserCreate";
 import UserDetailsByEmail from "@/src/pages/users/UserDetailsByEmail";
 import HRHub from "@/src/pages/Hub/HRhub";
+import SystemHub from "@/src/pages/Hub/SystemHub";
 import DepartmentDetails from "@/src/pages/HR/DepartmentDetails";
 import DepartmentForm from "@/src/pages/HR/DepartmentForm";
 import DepartmentRegistry from "@/src/pages/HR/DepartmentRegistry";
@@ -52,6 +53,13 @@ import {
   Payroll,
   Performance,
 } from "@/src/pages/Leave/HRSubModules";
+import PrintPreviewPage from "@/src/pages/print/PrintPreviewPage";
+import InventoryStatusReport from "@/src/pages/reports/InventoryStatusReport";
+import DataImport from "@/src/pages/data-import/DataImport";
+import ImportWizard from "@/src/pages/data-import/ImportWizard";
+import TableRegistryList from "@/src/pages/table-registry/TableRegistryList";
+import TableRegistryDetail from "@/src/pages/table-registry/TableRegistryDetail";
+import TableRegistryForm from "@/src/pages/table-registry/TableRegistryForm";
 interface RouteConfig {
   key: string;
   name: string;
@@ -126,6 +134,16 @@ const routes: RouteConfig[] = [
   {
     key: "report-valuation",
     name: "Valuation Report",
+    path: "/inventory/inventory-control-report",
+    element: (
+      <RouteGuard>
+        <InventoryStatusReport />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "report-valuation",
+    name: "Valuation Report",
     path: "/inventory/valuation",
     element: (
       <RouteGuard>
@@ -140,6 +158,16 @@ const routes: RouteConfig[] = [
     element: (
       <RouteGuard>
         <SalesSummaryReport />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-adjustments",
+    name: "Stock Adjustments",
+    path: "/inventory/stock-adjustments",
+    element: (
+      <RouteGuard>
+        <StockAdjustmentsRegistry />
       </RouteGuard>
     ),
   },
@@ -319,6 +347,17 @@ const routes: RouteConfig[] = [
     ),
   },
   {
+    key: "medicine-import",
+    name: "Medicine Import",
+    path: "inventory/medicines/import",
+    element: (
+      <RouteGuard>
+        <MedicineImportPage />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
     key: "medicine-details",
     name: "Medicine Details",
     path: "inventory/medicines/:naming_series",
@@ -423,15 +462,25 @@ const routes: RouteConfig[] = [
     ),
   },
   {
-    key: "stock-out-print",
-    name: "Print Stock Out",
-    path: "/inventory/stock-outs/:postingNumber/print",
+    key: "print-preview",
+    name: "Print Preview",
+    path: "/print/:documentType/:documentRef",
     element: (
-      <RouteGuard>
-        <StockOutPrint />
+      <RouteGuard mainLayouttrue={true}>
+        <PrintPreviewPage />
       </RouteGuard>
     ),
     visible: false,
+  },
+  {
+    key: "system",
+    name: "System Hub",
+    path: "/system",
+    element: (
+      <RouteGuard>
+        <SystemHub />
+      </RouteGuard>
+    ),
   },
   {
     key: "logs",
@@ -591,6 +640,72 @@ const routes: RouteConfig[] = [
     element: (
       <RouteGuard>
         <Payroll />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "data-import",
+    name: "Data Import",
+    path: "/system/data-import",
+    element: (
+      <RouteGuard>
+        <DataImport />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "data-import-wizard",
+    name: "Import Wizard",
+    path: "/system/data-import/wizard",
+    element: (
+      <RouteGuard>
+        <ImportWizard />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "table-registry",
+    name: "Table Registry",
+    path: "/system/table-registry",
+    element: (
+      <RouteGuard>
+        <TableRegistryList />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "table-registry-new",
+    name: "Add Table",
+    path: "/system/table-registry/new",
+    element: (
+      <RouteGuard>
+        <TableRegistryForm />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "table-registry-edit",
+    name: "Edit Table",
+    path: "/system/table-registry/:tableCode/edit",
+    element: (
+      <RouteGuard>
+        <TableRegistryForm />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "table-registry-detail",
+    name: "Table Details",
+    path: "/system/table-registry/:tableCode",
+    element: (
+      <RouteGuard>
+        <TableRegistryDetail />
       </RouteGuard>
     ),
     visible: false,

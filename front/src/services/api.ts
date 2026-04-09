@@ -13,7 +13,10 @@ const getStoredAccessToken = () => {
     return null;
   }
 
-  return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY);
+  return document.cookie
+    .split("; ")
+    .find((row) => row.startsWith(`${ACCESS_TOKEN_STORAGE_KEY}=`))
+    ?.split("=")[1] || null;
 };
 
 const setStoredAccessToken = (token: string) => {
@@ -21,7 +24,8 @@ const setStoredAccessToken = (token: string) => {
     return;
   }
 
-  window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, token);
+  // Store the token in Cookie instead of localStorage for persistence across sessions max age 24 hours
+  document.cookie = `${ACCESS_TOKEN_STORAGE_KEY}=${token}; path=/; max-age=86400; SameSite=Lax`;
 };
 
 const clearStoredAccessToken = () => {
@@ -29,7 +33,7 @@ const clearStoredAccessToken = () => {
     return;
   }
 
-  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  document.cookie = `${ACCESS_TOKEN_STORAGE_KEY}=; path=/; max-age=0; SameSite=Lax`;
 };
 
 const api = axios.create({

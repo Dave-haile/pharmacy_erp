@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 
 import DataTable, { Column } from "../../components/DataTable";
 import {
+  DocumentField,
   DocumentHeader,
   DocumentPage,
   DocumentSummaryCard,
+  documentInputClassName,
   documentPrimaryButtonClassName,
 } from "../../components/common/DocumentUI";
 import { fetchStockOuts } from "../../services/stockOuts";
@@ -128,58 +130,74 @@ const StockOutRegistry: React.FC = () => {
   ];
 
   const filtersContent = (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <input
-        name="posting_number"
-        value={filters.posting_number}
-        onChange={(event) =>
-          setFilters((previous) => ({
-            ...previous,
-            posting_number: event.target.value,
-          }))
-        }
-        placeholder="Posting number"
-        className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-      />
-      <input
-        name="invoice_number"
-        value={filters.invoice_number}
-        onChange={(event) =>
-          setFilters((previous) => ({
-            ...previous,
-            invoice_number: event.target.value,
-          }))
-        }
-        placeholder="Invoice number"
-        className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-      />
-      <input
-        name="customer_name"
-        value={filters.customer_name}
-        onChange={(event) =>
-          setFilters((previous) => ({
-            ...previous,
-            customer_name: event.target.value,
-          }))
-        }
-        placeholder="Customer"
-        className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-      />
-      <select
-        value={filters.status}
-        onChange={(event) =>
-          setFilters((previous) => ({
-            ...previous,
-            status: event.target.value,
-          }))
-        }
-        className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-      >
-        <option value="">All statuses</option>
-        <option value="Draft">Draft</option>
-        <option value="Posted">Posted</option>
-        <option value="Cancelled">Cancelled</option>
-      </select>
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <DocumentField label="Posting Number">
+        <input
+          name="posting_number"
+          value={filters.posting_number}
+          onChange={(event) =>
+            setFilters((previous) => ({
+              ...previous,
+              posting_number: event.target.value,
+            }))
+          }
+          placeholder="Posting number"
+          className={`${documentInputClassName} w-full`}
+        />
+      </DocumentField>
+      <DocumentField label="Invoice Number">
+        <input
+          name="invoice_number"
+          value={filters.invoice_number}
+          onChange={(event) =>
+            setFilters((previous) => ({
+              ...previous,
+              invoice_number: event.target.value,
+            }))
+          }
+          placeholder="Invoice number"
+          className={`${documentInputClassName} w-full`}
+        />
+      </DocumentField>
+      <DocumentField label="Customer Name">
+        <input
+          name="customer_name"
+          value={filters.customer_name}
+          onChange={(event) =>
+            setFilters((previous) => ({
+              ...previous,
+              customer_name: event.target.value,
+            }))
+          }
+          placeholder="Customer"
+          className={`${documentInputClassName} w-full`}
+        />
+      </DocumentField>
+      <DocumentField label="Status">
+        <div className="relative">
+          {!filters.status && (
+            <span className="pointer-events-none absolute left-3 top-1/2 z-1 -translate-y-1/2 text-[11px] font-mono font-bold text-slate-400 dark:text-slate-500">
+              Status
+            </span>
+          )}
+          <select
+            autoComplete="off"
+            value={filters.status}
+            onChange={(event) =>
+              setFilters((previous) => ({
+                ...previous,
+                status: event.target.value,
+              }))
+            }
+            className={`${documentInputClassName} w-full`}
+          >
+            <option value=""></option>
+            <option value="Draft">Draft</option>
+            <option value="Posted">Posted</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
+      </DocumentField>
     </div>
   );
 
@@ -189,7 +207,7 @@ const StockOutRegistry: React.FC = () => {
         eyebrow="Sales & Distribution"
         title="Stock Out Register"
         description="Review draft, posted, and cancelled stock-out documents using the same registry pattern as stock entry."
-        onBack={() => navigate("/dashboard")}
+        onBack={() => navigate(-1)}
         actions={
           <button
             onClick={() => navigate("/inventory/stock-outs/new-stock-out")}
@@ -209,13 +227,17 @@ const StockOutRegistry: React.FC = () => {
         />
         <DocumentSummaryCard
           label="Draft Documents"
-          value={String(filteredItems.filter((item) => item.status === "Draft").length)}
+          value={String(
+            filteredItems.filter((item) => item.status === "Draft").length,
+          )}
           hint="Editable stock-out drafts"
           tone="amber"
         />
         <DocumentSummaryCard
           label="Posted Documents"
-          value={String(filteredItems.filter((item) => item.status === "Posted").length)}
+          value={String(
+            filteredItems.filter((item) => item.status === "Posted").length,
+          )}
           hint="Inventory already deducted"
           tone="blue"
         />
@@ -240,9 +262,12 @@ const StockOutRegistry: React.FC = () => {
         onRefresh={loadItems}
         filters={filtersContent}
         onRowClick={(item) =>
-          navigate(`/inventory/stock-outs/${item.posting_number}?id=${item.id}`, {
-            state: { saleId: item.id },
-          })
+          navigate(
+            `/inventory/stock-outs/${item.posting_number}?id=${item.id}`,
+            {
+              state: { saleId: item.id },
+            },
+          )
         }
         emptyMessage="No stock-out documents found"
         loadingMessage="Loading stock-out register..."

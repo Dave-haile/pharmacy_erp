@@ -1,7 +1,7 @@
 # models/management/commands/seed_data.py
 from django.core.management.base import BaseCommand
 
-from tables.modle.seeder.inventory_hub_seeder import InventoryHubSeeder
+from tables.model_definitions.seeder.inventory_hub_seeder import InventoryHubSeeder
 
 
 class Command(BaseCommand):

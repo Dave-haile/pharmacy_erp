@@ -9,13 +9,17 @@ import {
   DocumentSummaryCard,
   documentInputClassName,
 } from "../../components/common/DocumentUI";
+import { useNavigate } from "react-router-dom";
 
-type Row = Awaited<ReturnType<typeof fetchSalesSummaryReport>>["top_items"][number];
+type Row = Awaited<
+  ReturnType<typeof fetchSalesSummaryReport>
+>["top_items"][number];
 
 const SalesSummaryReport: React.FC = () => {
   const { showError } = useToast();
   const [filters, setFilters] = useState({ start_date: "", end_date: "" });
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedFilters(filters), 300);
@@ -70,20 +74,26 @@ const SalesSummaryReport: React.FC = () => {
   return (
     <DocumentPage>
       <DocumentHeader
+        eyebrow="Sales & Distribution"
         title="Sales Summary"
-        subtitle="Posted sales totals and top items."
+        description="Posted sales totals and top items."
+        onBack={() => navigate(-1)}
         actions={
           <div className="flex items-center gap-2">
             <input
               type="date"
               value={filters.start_date}
-              onChange={(e) => setFilters((p) => ({ ...p, start_date: e.target.value }))}
+              onChange={(e) =>
+                setFilters((p) => ({ ...p, start_date: e.target.value }))
+              }
               className={documentInputClassName}
             />
             <input
               type="date"
               value={filters.end_date}
-              onChange={(e) => setFilters((p) => ({ ...p, end_date: e.target.value }))}
+              onChange={(e) =>
+                setFilters((p) => ({ ...p, end_date: e.target.value }))
+              }
               className={documentInputClassName}
             />
           </div>
@@ -91,8 +101,14 @@ const SalesSummaryReport: React.FC = () => {
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <DocumentSummaryCard label="Total Sales" value={data?.total_sales || "0"} />
-        <DocumentSummaryCard label="Sale Count" value={String(data?.sale_count || 0)} />
+        <DocumentSummaryCard
+          label="Total Sales"
+          value={data?.total_sales || "0"}
+        />
+        <DocumentSummaryCard
+          label="Sale Count"
+          value={String(data?.sale_count || 0)}
+        />
         <DocumentSummaryCard label="Start" value={data?.start_date || "—"} />
         <DocumentSummaryCard label="End" value={data?.end_date || "—"} />
       </section>
@@ -110,4 +126,3 @@ const SalesSummaryReport: React.FC = () => {
 };
 
 export default SalesSummaryReport;
-

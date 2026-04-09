@@ -9,11 +9,13 @@ import api from "./api";
 
 export const fetchStockOuts = async () => {
   const res = await api.get("/api/inventory/stock-outs/");
+  console.log("Fetched stock-outs:", res.data);
   return res.data as StockOutListResponse;
 };
 
 export const fetchStockOutById = async (saleId: string | number) => {
   const res = await api.get(`/api/inventory/stock-outs/${saleId}/`);
+  console.log("Fetched stock-out:", res.data);
   return res.data as StockOutDetail;
 };
 

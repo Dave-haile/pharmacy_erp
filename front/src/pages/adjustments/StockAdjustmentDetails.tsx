@@ -33,7 +33,6 @@ import type {
   CreateStockAdjustment,
   InventoryBatchItem,
   Log,
-  StockAdjustmentDetail,
   StockAdjustmentItemInput,
 } from "../../types/types";
 import { GetErrorMessage } from "../../components/ShowErrorToast";
@@ -259,7 +258,7 @@ const StockAdjustmentDetails: React.FC = () => {
       message: "This will apply quantity changes to batches and inventory.",
       confirmLabel: "Post",
       cancelLabel: "Cancel",
-      variant: "info",
+      variant: "default",
     });
     if (!confirmed) return;
     setIsPosting(true);
@@ -301,6 +300,7 @@ const StockAdjustmentDetails: React.FC = () => {
   return (
     <DocumentPage>
       <DocumentHeader
+        eyebrow="Inventory Control"
         title={isNew ? "Create Stock Adjustment" : "Stock Adjustment"}
         description="Adjust quantities for a specific batch (cycle count/write-off/damage/expiry)."
         onBack={() => navigate("/inventory/stock-adjustments")}

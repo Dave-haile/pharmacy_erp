@@ -2,11 +2,18 @@ from decimal import Decimal
 
 from django.core.validators import MinValueValidator
 from django.db import models
-from tables.modle.naming_series import MedicineNamingSeries
+from tables.model_definitions.naming_series import MedicineNamingSeries
 
 
 class Department(models.Model):
     name = models.CharField(max_length=120, unique=True, db_index=True)
+    print = models.ForeignKey(
+        "tables.PrintFormat",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="departments",
+    )
     description = models.TextField(blank=True)
     manager_name = models.CharField(max_length=200, blank=True)
     is_active = models.BooleanField(default=True, db_index=True)
@@ -61,6 +68,13 @@ class Employee(models.Model):
         blank=True,
         null=True,
         db_index=True,
+    )
+    print = models.ForeignKey(
+        "tables.PrintFormat",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="employees",
     )
     first_name = models.CharField(max_length=100)
     middle_name = models.CharField(max_length=100, blank=True)

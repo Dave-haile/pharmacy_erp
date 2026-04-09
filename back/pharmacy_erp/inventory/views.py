@@ -1,8 +1,13 @@
+import csv
 import hashlib
+import io
 import json
 import re
+import zipfile
 from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
+from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape as xml_escape
 
 from django.core.cache import cache
 from django.core.paginator import EmptyPage, Paginator
@@ -10,20 +15,23 @@ from django.db import transaction
 from django.db.models import Count, DecimalField, IntegerField, Q, Sum, Value
 from django.db.models.deletion import ProtectedError
 from django.db.models.functions import Coalesce
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from tables.modle import (
+from tables.model_definitions import (
     Batches,
     Category,
+    CostLayer,
     GoodRecivingNote,
     GoodRecivingNoteItem,
     Inventory,
+    InventoryValuation,
     Medicine,
     Purchase,
     PurchaseItem,
+    PrintFormat,
     Sale,
     SaleItem,
     SalesReturn,
@@ -36,8 +44,16 @@ from tables.modle import (
     Supplier,
     SupplierReturn,
     SupplierReturnItem,
+    SystemConfig,
 )
-from tables.modle.user_log import UserLog
+from tables.model_definitions.user_log import UserLog
+from .costing import (
+    calculate_cogs,
+    consume_stock,
+    add_stock_layer,
+    InsufficientStockError,
+    CostingMethodError,
+)
 
 
 class DashboardStatsView:
@@ -121,6 +137,91 @@ def _serialize_user_log(log):
         "user_id": log.user_id,
         "username": getattr(log.user, "username", None),
     }
+
+
+def _serialize_print_format(print_format):
+    return {
+        "id": print_format.id,
+        "document_type": print_format.document_type,
+        "document_type_label": print_format.get_document_type_display(),
+        "name": print_format.name,
+        "slug": print_format.slug,
+        "template_key": print_format.template_key,
+        "template_label": print_format.get_template_key_display(),
+        "description": print_format.description,
+        "html_template": print_format.html_template,
+        "css_template": print_format.css_template,
+        "js_template": print_format.js_template,
+        "has_custom_template": bool(
+            (print_format.html_template or "").strip()
+            or (print_format.css_template or "").strip()
+            or (print_format.js_template or "").strip()
+        ),
+        "paper_size": print_format.paper_size,
+        "orientation": print_format.orientation,
+        "is_active": print_format.is_active,
+        "is_default": print_format.is_default,
+        "created_at": print_format.created_at.isoformat(),
+        "updated_at": print_format.updated_at.isoformat(),
+    }
+
+
+def _normalize_print_format_payload(payload):
+    document_type = _compact_text(payload.get("document_type", ""))
+    name = _compact_text(payload.get("name", ""))
+    slug = _compact_text(payload.get("slug", "")) or None
+    template_key = _compact_text(payload.get("template_key", "")) or PrintFormat.TEMPLATE_STANDARD
+    description = (payload.get("description") or "").strip()
+    html_template = payload.get("html_template") or ""
+    css_template = payload.get("css_template") or ""
+    js_template = payload.get("js_template") or ""
+    paper_size = _compact_text(payload.get("paper_size", "")) or PrintFormat.PAPER_A4
+    orientation = (
+        _compact_text(payload.get("orientation", "")) or PrintFormat.ORIENTATION_PORTRAIT
+    )
+    is_default = bool(payload.get("is_default"))
+
+    valid_document_types = {choice[0] for choice in PrintFormat.DOCUMENT_TYPE_CHOICES}
+    valid_template_keys = {choice[0] for choice in PrintFormat.TEMPLATE_CHOICES}
+    valid_paper_sizes = {choice[0] for choice in PrintFormat.PAPER_SIZE_CHOICES}
+    valid_orientations = {choice[0] for choice in PrintFormat.ORIENTATION_CHOICES}
+
+    if not document_type or document_type not in valid_document_types:
+        raise ValueError("Document type is invalid.")
+    if not name:
+        raise ValueError("Print format name is required.")
+    if template_key not in valid_template_keys:
+        raise ValueError("Template type is invalid.")
+    if paper_size not in valid_paper_sizes:
+        raise ValueError("Paper size is invalid.")
+    if orientation not in valid_orientations:
+        raise ValueError("Orientation is invalid.")
+
+    generated_slug = slug or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if not generated_slug:
+        raise ValueError("Print format slug is required.")
+
+    return {
+        "document_type": document_type,
+        "name": name,
+        "slug": generated_slug,
+        "template_key": template_key,
+        "description": description,
+        "html_template": str(html_template),
+        "css_template": str(css_template),
+        "js_template": str(js_template),
+        "paper_size": paper_size,
+        "orientation": orientation,
+        "is_active": True,
+        "is_default": is_default,
+    }
+
+
+def _save_print_format_changes(print_format, payload):
+    for field, value in payload.items():
+        setattr(print_format, field, value)
+    print_format.save()
+    return print_format
 
 
 def _filter_logs_for_entity(queryset, entity_key, entity_id):
@@ -1660,6 +1761,20 @@ def _post_stock_entry(stock_entry):
             or f"Stock IN via stock entry {stock_entry.posting_number}",
         )
 
+        # Create cost layer for this stock receipt
+        inventory_for_layer = Inventory.objects.filter(
+            medicine=item.medicine, batch_number=item.batch_number
+        ).first()
+
+        add_stock_layer(
+            medicine=item.medicine,
+            quantity=item.quantity,
+            unit_cost=item.unit_price,
+            inventory=inventory_for_layer,
+            stock_entry_item=item,
+            expiry_date=item.expiry_date,
+        )
+
         created_items.append(
             {
                 "stock_entry_item_id": item.id,
@@ -2122,6 +2237,22 @@ def _post_sale(sale):
             notes=f"Stock OUT via sale {sale.posting_number}",
         )
 
+        # Calculate COGS using costing method
+        try:
+            total_cogs, layers_used, method_used = consume_stock(
+                medicine=item.medicine,
+                quantity_needed=item.quantity
+            )
+
+            # Update sale item with cost information
+            item.calculated_cost = total_cogs
+            item.unit_cost = total_cogs / item.quantity if item.quantity > 0 else 0
+            item.cost_layers_used = layers_used
+            item.costing_method = method_used
+            item.save(update_fields=["calculated_cost", "unit_cost", "cost_layers_used", "costing_method"])
+        except InsufficientStockError as e:
+            raise ValueError(f"Cannot calculate cost for {item.medicine.name}: {str(e)}")
+
         reversed_items.append(
             {
                 "sale_item_id": item.id,
@@ -2250,22 +2381,514 @@ def _reverse_posted_sale(sale):
     )
 
 
+def _serialize_medicine(medicine):
+    return {
+        "id": medicine.id,
+        "name": medicine.name,
+        "generic_name": medicine.generic_name,
+        "category": medicine.category.name if medicine.category else "",
+        "category_id": medicine.category_id,
+        "supplier": medicine.supplier.name if medicine.supplier else "",
+        "supplier_id": medicine.supplier_id,
+        "cost_price": str(medicine.cost_price),
+        "selling_price": str(medicine.selling_price),
+        "barcode": medicine.barcode,
+        "naming_series": medicine.naming_series,
+        "description": medicine.description,
+        "status": medicine.status,
+        "is_active": medicine.is_active,
+        "created_at": medicine.created_at.isoformat(),
+    }
+
+
+def _get_medicine_filter_values(request):
+    return {
+        "search": _compact_text(request.GET.get("search", "")),
+        "category": _compact_text(request.GET.get("category", "")),
+        "supplier": _compact_text(request.GET.get("supplier", "")),
+        "status": _compact_text(request.GET.get("status", "")),
+        "include_inactive": _is_truthy_query_value(
+            request.GET.get("include_inactive")
+        ),
+    }
+
+
+def _build_medicine_queryset(filters):
+    queryset = Medicine.objects.select_related("category", "supplier")
+    if not filters["include_inactive"]:
+        queryset = queryset.filter(is_active=True)
+
+    if filters["search"]:
+        queryset = queryset.filter(
+            Q(name__icontains=filters["search"])
+            | Q(generic_name__icontains=filters["search"])
+            | Q(barcode__icontains=filters["search"])
+        )
+
+    if filters["category"]:
+        queryset = queryset.filter(category_id=filters["category"])
+
+    if filters["supplier"]:
+        queryset = queryset.filter(supplier_id=filters["supplier"])
+
+    if filters["status"]:
+        queryset = queryset.filter(status=filters["status"])
+
+    return queryset.order_by("-created_at")
+
+
+def _sanitize_excel_text(value):
+    cleaned = str(value or "")
+    return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]", "", cleaned)
+
+
+def _build_medicine_export_rows(medicines):
+    columns = [
+        ("Naming Series", lambda medicine: medicine.naming_series),
+        ("Name", lambda medicine: medicine.name),
+        ("Generic Name", lambda medicine: medicine.generic_name),
+        ("Barcode", lambda medicine: medicine.barcode),
+        ("Category", lambda medicine: medicine.category.name if medicine.category else ""),
+        ("Category ID", lambda medicine: medicine.category_id or ""),
+        ("Supplier", lambda medicine: medicine.supplier.name if medicine.supplier else ""),
+        ("Supplier ID", lambda medicine: medicine.supplier_id or ""),
+        ("Cost Price", lambda medicine: medicine.cost_price),
+        ("Selling Price", lambda medicine: medicine.selling_price),
+        ("Status", lambda medicine: medicine.status),
+        ("Is Active", lambda medicine: "true" if medicine.is_active else "false"),
+        ("Created At", lambda medicine: medicine.created_at.isoformat()),
+        ("Description", lambda medicine: medicine.description),
+    ]
+
+    rows = []
+    for medicine in medicines:
+        row = {}
+        for label, resolver in columns:
+            row[label] = str(resolver(medicine) or "")
+        rows.append(row)
+
+    return [label for label, _ in columns], rows
+
+
+def _build_csv_response(file_name, headers, rows):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{file_name}.csv"'
+    writer = csv.DictWriter(response, fieldnames=headers)
+    writer.writeheader()
+    writer.writerows(rows)
+    return response
+
+
+def _build_json_response(file_name, filters, rows):
+    response = HttpResponse(content_type="application/json")
+    response["Content-Disposition"] = f'attachment; filename="{file_name}.json"'
+    response.write(
+        json.dumps(
+            {
+                "filters": filters,
+                "count": len(rows),
+                "rows": rows,
+            },
+            indent=2,
+        )
+    )
+    return response
+
+
+def _column_number_to_name(index):
+    result = []
+    current = index
+    while current > 0:
+        current, remainder = divmod(current - 1, 26)
+        result.append(chr(65 + remainder))
+    return "".join(reversed(result))
+
+
+def _build_xlsx_response(file_name, headers, rows):
+    workbook_buffer = io.BytesIO()
+    namespaces = {
+        "content_types": "http://schemas.openxmlformats.org/package/2006/content-types",
+        "rels": "http://schemas.openxmlformats.org/package/2006/relationships",
+        "office": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+        "spreadsheet": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+    }
+
+    worksheet_rows = []
+    all_rows = [headers] + [[row.get(header, "") for header in headers] for row in rows]
+    for row_index, row_values in enumerate(all_rows, start=1):
+        cells = []
+        for column_index, value in enumerate(row_values, start=1):
+            cell_ref = f"{_column_number_to_name(column_index)}{row_index}"
+            cells.append(
+                f'<c r="{cell_ref}" t="inlineStr"><is><t>{xml_escape(_sanitize_excel_text(value))}</t></is></c>'
+            )
+        worksheet_rows.append(f'<row r="{row_index}">{"".join(cells)}</row>')
+
+    sheet_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<worksheet xmlns="{namespaces["spreadsheet"]}">'
+        f"<sheetData>{''.join(worksheet_rows)}</sheetData>"
+        "</worksheet>"
+    )
+
+    with zipfile.ZipFile(workbook_buffer, "w", zipfile.ZIP_DEFLATED) as workbook:
+        workbook.writestr(
+            "[Content_Types].xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<Types xmlns="{namespaces["content_types"]}">'
+                '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+                '<Default Extension="xml" ContentType="application/xml"/>'
+                '<Override PartName="/xl/workbook.xml" '
+                'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+                '<Override PartName="/xl/worksheets/sheet1.xml" '
+                'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+                "</Types>"
+            ),
+        )
+        workbook.writestr(
+            "_rels/.rels",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<Relationships xmlns="{namespaces["rels"]}">'
+                f'<Relationship Id="rId1" Type="{namespaces["office"]}/officeDocument" Target="xl/workbook.xml"/>'
+                "</Relationships>"
+            ),
+        )
+        workbook.writestr(
+            "xl/workbook.xml",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<workbook xmlns="{namespaces["spreadsheet"]}" xmlns:r="{namespaces["office"]}">'
+                '<sheets><sheet name="Medicines" sheetId="1" r:id="rId1"/></sheets>'
+                "</workbook>"
+            ),
+        )
+        workbook.writestr(
+            "xl/_rels/workbook.xml.rels",
+            (
+                '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                f'<Relationships xmlns="{namespaces["rels"]}">'
+                f'<Relationship Id="rId1" Type="{namespaces["office"]}/worksheet" Target="worksheets/sheet1.xml"/>'
+                "</Relationships>"
+            ),
+        )
+        workbook.writestr("xl/worksheets/sheet1.xml", sheet_xml)
+
+    response = HttpResponse(
+        workbook_buffer.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = f'attachment; filename="{file_name}.xlsx"'
+    return response
+
+
+def _escape_pdf_text(value):
+    return (
+        str(value or "")
+        .replace("\\", "\\\\")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+    )
+
+
+def _build_simple_pdf(lines, title):
+    objects = []
+
+    def add_object(payload):
+        objects.append(payload)
+        return len(objects)
+
+    font_id = add_object("<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>")
+    content_lines = ["BT", "/F1 10 Tf", "40 560 Td", f"({ _escape_pdf_text(title) }) Tj"]
+    y_offset = 0
+    for line in lines:
+        y_offset += 14
+        content_lines.append(
+            f"1 0 0 1 40 {560 - y_offset} Tm ({_escape_pdf_text(line)}) Tj"
+        )
+    content_lines.append("ET")
+    stream = "\n".join(content_lines)
+    content_id = add_object(
+        f"<< /Length {len(stream.encode('latin-1', errors='replace'))} >>\nstream\n{stream}\nendstream"
+    )
+    page_id = add_object(
+        f"<< /Type /Page /Parent 4 0 R /MediaBox [0 0 842 595] /Contents {content_id} 0 R "
+        f"/Resources << /Font << /F1 {font_id} 0 R >> >> >>"
+    )
+    pages_id = add_object(f"<< /Type /Pages /Count 1 /Kids [{page_id} 0 R] >>")
+    catalog_id = add_object(f"<< /Type /Catalog /Pages {pages_id} 0 R >>")
+
+    pdf = io.BytesIO()
+    pdf.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(pdf.tell())
+        pdf.write(
+            f"{index} 0 obj\n{obj}\nendobj\n".encode("latin-1", errors="replace")
+        )
+    xref_start = pdf.tell()
+    pdf.write(f"xref\n0 {len(objects) + 1}\n".encode("latin-1"))
+    pdf.write(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        pdf.write(f"{offset:010d} 00000 n \n".encode("latin-1"))
+    pdf.write(
+        (
+            f"trailer << /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\n"
+            f"startxref\n{xref_start}\n%%EOF"
+        ).encode("latin-1")
+    )
+    return pdf.getvalue()
+
+
+def _build_pdf_response(file_name, headers, rows):
+    header_line = " | ".join(headers)
+    separator_line = "-" * min(len(header_line), 180)
+    data_lines = [
+        " | ".join(_truncate_text(row.get(header, ""), 24) for header in headers)
+        for row in rows
+    ]
+    pdf_bytes = _build_simple_pdf(
+        [header_line, separator_line] + data_lines, "Medicine Registry Export"
+    )
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{file_name}.pdf"'
+    return response
+
+
+def _parse_csv_import(file_bytes):
+    text = file_bytes.decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(text))
+    return [dict(row) for row in reader]
+
+
+def _parse_json_import(file_bytes):
+    payload = json.loads(file_bytes.decode("utf-8-sig"))
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict) and isinstance(payload.get("rows"), list):
+        return payload["rows"]
+    raise ValueError("JSON import file must contain an array or a rows array.")
+
+
+def _parse_xlsx_import(file_bytes):
+    with zipfile.ZipFile(io.BytesIO(file_bytes)) as workbook:
+        shared_strings = []
+        if "xl/sharedStrings.xml" in workbook.namelist():
+            root = ET.fromstring(workbook.read("xl/sharedStrings.xml"))
+            namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+            for string_item in root.findall("main:si", namespace):
+                shared_strings.append(
+                    "".join(
+                        node.text or ""
+                        for node in string_item.findall(".//main:t", namespace)
+                    )
+                )
+
+        sheet_root = ET.fromstring(workbook.read("xl/worksheets/sheet1.xml"))
+        namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        parsed_rows = []
+        for row in sheet_root.findall(".//main:row", namespace):
+            values = []
+            for cell in row.findall("main:c", namespace):
+                cell_type = cell.attrib.get("t")
+                if cell_type == "inlineStr":
+                    values.append(
+                        "".join(
+                            node.text or ""
+                            for node in cell.findall(".//main:t", namespace)
+                        )
+                    )
+                    continue
+                value_node = cell.find("main:v", namespace)
+                raw_value = value_node.text if value_node is not None else ""
+                if cell_type == "s" and raw_value:
+                    values.append(shared_strings[int(raw_value)])
+                else:
+                    values.append(raw_value or "")
+            parsed_rows.append(values)
+
+    if not parsed_rows:
+        return []
+    headers = parsed_rows[0]
+    return [
+        {headers[index]: value for index, value in enumerate(row)}
+        for row in parsed_rows[1:]
+        if any(str(value).strip() for value in row)
+    ]
+
+
+MEDICINE_IMPORT_COLUMNS = [
+    "Name",
+    "Generic Name",
+    "Barcode",
+    "Category ID",
+    "Supplier ID",
+    "Cost Price",
+    "Selling Price",
+    "Status",
+    "Is Active",
+    "Description",
+]
+
+MEDICINE_IMPORT_REQUIRED_COLUMNS = ["Name", "Barcode", "Category ID"]
+
+
+def _normalize_boolean_import_value(raw_value):
+    normalized = str(raw_value or "").strip().lower()
+    if normalized in {"", "true", "1", "yes", "active"}:
+        return True, None
+    if normalized in {"false", "0", "no", "inactive"}:
+        return False, None
+    return None, "Expected a boolean-like value such as true/false, yes/no, or 1/0."
+
+
+def _normalize_decimal_import_value(raw_value, field_label):
+    value = str(raw_value or "").strip()
+    if not value:
+        return "0", None
+    try:
+        normalized = Decimal(value)
+    except (InvalidOperation, TypeError):
+        return None, f"{field_label} must be a valid number."
+    return str(normalized), None
+
+
+def _normalize_integer_import_value(raw_value, field_label, required=False):
+    value = str(raw_value or "").strip()
+    if not value:
+        if required:
+            return None, f"{field_label} is required."
+        return None, None
+    try:
+        return int(value), None
+    except (TypeError, ValueError):
+        return None, f"{field_label} must be a whole number."
+
+
+def _validate_imported_medicine_row(row):
+    def get_value(*keys):
+        for key in keys:
+            value = row.get(key)
+            if value is not None and str(value).strip():
+                return str(value).strip()
+        return ""
+
+    errors = []
+    name = get_value("Name", "name")
+    barcode = get_value("Barcode", "barcode")
+    category_id = get_value("Category ID", "category_id")
+
+    if not name:
+        errors.append({"column": "Name", "message": "Name is required."})
+    if not barcode:
+        errors.append({"column": "Barcode", "message": "Barcode is required."})
+
+    supplier_id_value = get_value("Supplier ID", "supplier_id")
+    status_value = get_value("Status", "status")
+    category_id_value, category_id_error = _normalize_integer_import_value(
+        category_id,
+        "Category ID",
+        required=True,
+    )
+    if category_id_error:
+        errors.append({"column": "Category ID", "message": category_id_error})
+
+    supplier_id, supplier_id_error = _normalize_integer_import_value(
+        supplier_id_value,
+        "Supplier ID",
+    )
+    if supplier_id_error:
+        errors.append({"column": "Supplier ID", "message": supplier_id_error})
+
+    cost_price, cost_price_error = _normalize_decimal_import_value(
+        get_value("Cost Price", "cost_price"),
+        "Cost Price",
+    )
+    if cost_price_error:
+        errors.append({"column": "Cost Price", "message": cost_price_error})
+
+    selling_price, selling_price_error = _normalize_decimal_import_value(
+        get_value("Selling Price", "selling_price"),
+        "Selling Price",
+    )
+    if selling_price_error:
+        errors.append({"column": "Selling Price", "message": selling_price_error})
+
+    is_active, is_active_error = _normalize_boolean_import_value(
+        get_value("Is Active", "is_active")
+    )
+    if is_active_error:
+        errors.append({"column": "Is Active", "message": is_active_error})
+
+    normalized_status = (
+        Medicine.STATUS_SUBMITTED
+        if status_value.lower() == Medicine.STATUS_SUBMITTED.lower()
+        else Medicine.STATUS_DRAFT
+    )
+    if status_value and status_value.lower() not in {
+        Medicine.STATUS_DRAFT.lower(),
+        Medicine.STATUS_SUBMITTED.lower(),
+    }:
+        errors.append(
+            {
+                "column": "Status",
+                "message": "Status must be Draft or Submitted.",
+            }
+        )
+
+    normalized = {
+        "name": name,
+        "generic_name": get_value("Generic Name", "generic_name"),
+        "barcode": barcode,
+        "category_id": category_id_value,
+        "supplier_id": supplier_id,
+        "cost_price": cost_price,
+        "selling_price": selling_price,
+        "description": get_value("Description", "description"),
+        "status": normalized_status,
+        "is_active": is_active if is_active is not None else True,
+    }
+
+    return normalized, errors
+
+
+def _normalize_imported_medicine_row(row):
+    normalized, errors = _validate_imported_medicine_row(row)
+    if errors:
+        raise ValueError("; ".join(error["message"] for error in errors))
+
+    return normalized
+
+
+def _parse_uploaded_medicine_import_file(uploaded_file):
+    extension = (
+        uploaded_file.name.rsplit(".", 1)[-1].lower()
+        if "." in uploaded_file.name
+        else ""
+    )
+    file_bytes = uploaded_file.read()
+
+    if extension == "csv":
+        return extension, _parse_csv_import(file_bytes)
+    if extension == "json":
+        return extension, _parse_json_import(file_bytes)
+    if extension == "xlsx":
+        return extension, _parse_xlsx_import(file_bytes)
+    raise ValueError("Unsupported import format. Use csv, json, or xlsx.")
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def medicines_list(request):
 
     page_size = int(request.GET.get("page_size", 10))
     page = int(request.GET.get("page", 1))
-    search = request.GET.get("search", "")
-    category = request.GET.get("category", "")
-    supplier = request.GET.get("supplier", "")
-    status = request.GET.get("status", "")
-    include_inactive = _is_truthy_query_value(request.GET.get("include_inactive"))
+    filters = _get_medicine_filter_values(request)
 
-    # 🔑 Unique cache key per filter combination
     raw_key = (
-        f"medicines:{page}:{page_size}:{search}:{category}:{supplier}:{status}:"
-        f"{include_inactive}"
+        f"medicines:{page}:{page_size}:{filters['search']}:{filters['category']}:"
+        f"{filters['supplier']}:{filters['status']}:{filters['include_inactive']}"
     )
     cache_key = hashlib.md5(raw_key.encode()).hexdigest()
 
@@ -2273,26 +2896,7 @@ def medicines_list(request):
     if cached_response:
         return JsonResponse(cached_response)
 
-    queryset = Medicine.objects.select_related("category", "supplier")
-    if not include_inactive:
-        queryset = queryset.filter(is_active=True)
-
-    if search:
-        queryset = queryset.filter(
-            Q(name__icontains=search)
-            | Q(generic_name__icontains=search)
-            | Q(barcode__icontains=search)
-        )
-
-    if category:
-        queryset = queryset.filter(category_id=category)
-
-    if supplier:
-        queryset = queryset.filter(supplier_id=supplier)
-    if status:
-        queryset = queryset.filter(status=status)
-
-    queryset = queryset.order_by("-created_at")
+    queryset = _build_medicine_queryset(filters)
 
     paginator = Paginator(queryset, page_size)
 
@@ -2301,25 +2905,7 @@ def medicines_list(request):
     except EmptyPage:
         medicines_page = paginator.page(1)
 
-    medicines_data = [
-        {
-            "id": medicine.id,
-            "name": medicine.name,
-            "generic_name": medicine.generic_name,
-            "category": medicine.category.name if medicine.category else "",
-            "category_id": medicine.category_id,
-            "supplier": medicine.supplier.name if medicine.supplier else "",
-            "cost_price": str(medicine.cost_price),
-            "selling_price": str(medicine.selling_price),
-            "barcode": medicine.barcode,
-            "naming_series": medicine.naming_series,
-            "description": medicine.description,
-            "status": medicine.status,
-            "is_active": medicine.is_active,
-            "created_at": medicine.created_at.isoformat(),
-        }
-        for medicine in medicines_page
-    ]
+    medicines_data = [_serialize_medicine(medicine) for medicine in medicines_page]
 
     response_data = {
         "results": medicines_data,
@@ -2331,10 +2917,161 @@ def medicines_list(request):
         "has_previous": medicines_page.has_previous(),
     }
 
-    # Cache for 60 seconds only (ERP safety)
     cache.set(cache_key, response_data, timeout=60)
 
     return JsonResponse(response_data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def medicines_export(request):
+    filters = _get_medicine_filter_values(request)
+    export_format = _compact_text(request.GET.get("export_format", "")).lower()
+    medicines = list(_build_medicine_queryset(filters))
+    headers, rows = _build_medicine_export_rows(medicines)
+    file_name = f"Medicine-{timezone.now().strftime('%Y%m%d-%H%M%S')}"
+
+    if export_format == "csv":
+        return _build_csv_response(file_name, headers, rows)
+    if export_format == "json":
+        return _build_json_response(file_name, filters, rows)
+    if export_format == "xlsx":
+        return _build_xlsx_response(file_name, headers, rows)
+    if export_format == "pdf":
+        return _build_pdf_response(file_name, headers, rows)
+
+    return JsonResponse(
+        {"error": "Unsupported export format. Use csv, json, xlsx, or pdf."},
+        status=400,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def medicines_import_preview(request):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    uploaded_file = request.FILES.get("file")
+    if not uploaded_file:
+        return JsonResponse({"error": "Import file is required."}, status=400)
+
+    try:
+        source_format, raw_rows = _parse_uploaded_medicine_import_file(uploaded_file)
+    except Exception as exc:
+        return JsonResponse({"error": f"Failed to parse import file: {exc}"}, status=400)
+
+    columns = list(raw_rows[0].keys()) if raw_rows else []
+    missing_columns = [column for column in MEDICINE_IMPORT_REQUIRED_COLUMNS if column not in columns]
+    unexpected_columns = [column for column in columns if column not in MEDICINE_IMPORT_COLUMNS]
+
+    errors = []
+    for missing_column in missing_columns:
+        errors.append(
+            {
+                "row": None,
+                "column": missing_column,
+                "message": f"Missing required column: {missing_column}.",
+            }
+        )
+
+    valid_rows = 0
+    invalid_rows = 0
+    for index, row in enumerate(raw_rows, start=2):
+        _, row_errors = _validate_imported_medicine_row(row)
+        if row_errors:
+            invalid_rows += 1
+            for row_error in row_errors:
+                errors.append(
+                    {
+                        "row": index,
+                        "column": row_error["column"],
+                        "message": row_error["message"],
+                    }
+                )
+        else:
+            valid_rows += 1
+
+    sample_rows = []
+    for index, row in enumerate(raw_rows[:10], start=2):
+        sample_rows.append(
+            {
+                "row": index,
+                "values": {column: str(row.get(column, "") or "") for column in columns},
+            }
+        )
+
+    return JsonResponse(
+        {
+            "file_name": uploaded_file.name,
+            "source_format": source_format,
+            "columns": columns,
+            "expected_columns": MEDICINE_IMPORT_COLUMNS,
+            "missing_columns": missing_columns,
+            "unexpected_columns": unexpected_columns,
+            "total_rows": len(raw_rows),
+            "valid_rows": valid_rows,
+            "invalid_rows": invalid_rows,
+            "can_import": len(errors) == 0,
+            "errors": errors[:200],
+            "sample_rows": sample_rows,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def medicines_import(request):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    uploaded_file = request.FILES.get("file")
+    if not uploaded_file:
+        return JsonResponse({"error": "Import file is required."}, status=400)
+
+    try:
+        _source_format, raw_rows = _parse_uploaded_medicine_import_file(uploaded_file)
+    except Exception as exc:
+        return JsonResponse({"error": f"Failed to parse import file: {exc}"}, status=400)
+
+    created = 0
+    failures = []
+
+    for index, raw_row in enumerate(raw_rows, start=2):
+        try:
+            normalized = _normalize_imported_medicine_row(raw_row)
+            medicine = Medicine(**normalized)
+            medicine.save()
+            created += 1
+        except Exception as exc:
+            failures.append({"row": index, "error": str(exc)})
+
+    if created:
+        cache.clear()
+
+    UserLog.objects.create(
+        user=request.user,
+        action="Medicine Import",
+        details=json.dumps(
+            {
+                "file_name": uploaded_file.name,
+                "created": created,
+                "failed": len(failures),
+            },
+            default=str,
+        ),
+    )
+
+    return JsonResponse(
+        {
+            "message": "Medicine import completed.",
+            "created": created,
+            "failed": len(failures),
+            "failures": failures[:20],
+        }
+    )
 
 
 @api_view(["PUT"])
@@ -2485,6 +3222,7 @@ def medicines_create(request):
                 cost_price=medicine_data.get("cost_price"),
                 selling_price=medicine_data.get("selling_price"),
                 description=medicine_data.get("description"),
+                status=medicine_data.get("status") or Medicine.STATUS_DRAFT,
                 is_active=medicine_data.get(
                     "is_active", True
                 ),  # Default to True if not provided
@@ -3271,6 +4009,145 @@ def medicine_logs(request, medicine_id: int):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def print_formats_list(request):
+    queryset = PrintFormat.objects.all().order_by(
+        "document_type", "-is_default", "name"
+    )
+
+    document_type = _compact_text(request.GET.get("document_type", ""))
+    if document_type:
+        queryset = queryset.filter(document_type=document_type)
+
+    is_active = request.GET.get("is_active", "").strip().lower()
+    if is_active in {"true", "false"}:
+        queryset = queryset.filter(is_active=is_active == "true")
+
+    return JsonResponse(
+        {"results": [_serialize_print_format(item) for item in queryset]}
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def print_formats_create(request):
+    denied = _require_roles(request, {"admin", "manager", "pharmacist"})
+    if denied:
+        return denied
+    try:
+        payload = _normalize_print_format_payload(request.data or {})
+        print_format = PrintFormat.objects.create(**payload)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        if "uniq_print_format_document_type_slug" in str(exc).lower():
+            return JsonResponse(
+                {
+                    "error": "A print format with this slug already exists for the selected document type."
+                },
+                status=400,
+            )
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    return JsonResponse(
+        {
+            "message": "Print format created successfully.",
+            "print_format": _serialize_print_format(print_format),
+        },
+        status=201,
+    )
+
+
+@api_view(["PUT"])
+@permission_classes([IsAuthenticated])
+def print_formats_update(request, print_format_id: int):
+    denied = _require_roles(request, {"admin", "manager", "pharmacist"})
+    if denied:
+        return denied
+
+    try:
+        print_format = PrintFormat.objects.get(id=print_format_id)
+    except PrintFormat.DoesNotExist:
+        return JsonResponse({"error": "Print format not found."}, status=404)
+
+    try:
+        payload = _normalize_print_format_payload(request.data or {})
+        payload["document_type"] = print_format.document_type
+        print_format = _save_print_format_changes(print_format, payload)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+    except Exception as exc:
+        if "uniq_print_format_document_type_slug" in str(exc).lower():
+            return JsonResponse(
+                {
+                    "error": "A print format with this slug already exists for the selected document type."
+                },
+                status=400,
+            )
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    UserLog.objects.create(
+        user=request.user,
+        action="Print Format Updated",
+        details=json.dumps(
+            {
+                "print_format_id": print_format.id,
+                "document_type": print_format.document_type,
+                "slug": print_format.slug,
+                "name": print_format.name,
+            },
+            default=str,
+        ),
+    )
+
+    return JsonResponse(
+        {
+            "message": "Print format updated successfully.",
+            "print_format": _serialize_print_format(print_format),
+        }
+    )
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def print_formats_delete(request, print_format_id: int):
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    try:
+        print_format = PrintFormat.objects.get(id=print_format_id)
+    except PrintFormat.DoesNotExist:
+        return JsonResponse({"error": "Print format not found."}, status=404)
+
+    if print_format.is_default:
+        return JsonResponse(
+            {"error": "Default print formats cannot be deleted."}, status=400
+        )
+
+    print_format_name = print_format.name
+    print_format_slug = print_format.slug
+    print_format_document_type = print_format.document_type
+    print_format.delete()
+
+    UserLog.objects.create(
+        user=request.user,
+        action="Print Format Deleted",
+        details=json.dumps(
+            {
+                "print_format_id": print_format_id,
+                "document_type": print_format_document_type,
+                "slug": print_format_slug,
+                "name": print_format_name,
+            },
+            default=str,
+        ),
+    )
+
+    return JsonResponse({"message": "Print format deleted successfully."})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def stock_entry_logs(request, stock_entry_id):
     queryset = UserLog.objects.select_related("user").filter(
         action__istartswith="Stock Entry"
@@ -3346,6 +4223,26 @@ def stock_entry_detail(request, stock_entry_id: int):
             )
             .prefetch_related("items__medicine", "items__batch")
             .get(id=stock_entry_id)
+        )
+    except StockEntry.DoesNotExist:
+        return JsonResponse({"error": "Stock entry not found."}, status=404)
+
+    return JsonResponse(_serialize_stock_entry(stock_entry, include_items=True))
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stock_entry_detail_by_posting_number(request, posting_number: str):
+    try:
+        stock_entry = (
+            StockEntry.objects.select_related(
+                "supplier",
+                "received_by",
+                "purchase",
+                "goods_receiving_note",
+            )
+            .prefetch_related("items__medicine", "items__batch")
+            .get(posting_number=posting_number)
         )
     except StockEntry.DoesNotExist:
         return JsonResponse({"error": "Stock entry not found."}, status=404)
@@ -5741,3 +6638,397 @@ def stock_entries_create(request):
         },
         status=201,
     )
+
+
+# =============================================================================
+# COSTING REPORTS API ENDPOINTS
+# =============================================================================
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_cogs_summary(request):
+    """
+    Report: Cost of Goods Sold summary by date range.
+    Query params: start_date, end_date
+    """
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    start_date_str = request.GET.get("start_date")
+    end_date_str = request.GET.get("end_date")
+
+    if not start_date_str or not end_date_str:
+        return JsonResponse(
+            {"error": "start_date and end_date are required (YYYY-MM-DD)"}, status=400
+        )
+
+    try:
+        start_date = parse_date(start_date_str)
+        end_date = parse_date(end_date_str)
+        if not start_date or not end_date:
+            raise ValueError("Invalid date format")
+    except (ValueError, TypeError):
+        return JsonResponse(
+            {"error": "Invalid date format. Use YYYY-MM-DD"}, status=400
+        )
+
+    # Get sales in date range with cost data
+    sales = Sale.objects.filter(
+        status=Sale.STATUS_POSTED,
+        updated_at__date__gte=start_date,
+        updated_at__date__lte=end_date,
+    ).prefetch_related("items")
+
+    total_revenue = Decimal("0")
+    total_cogs = Decimal("0")
+    total_gross_profit = Decimal("0")
+    medicine_stats = {}
+
+    for sale in sales:
+        for item in sale.items.all():
+            revenue = item.subtotal
+            cogs = item.calculated_cost or Decimal("0")
+            profit = revenue - cogs
+
+            total_revenue += revenue
+            total_cogs += cogs
+            total_gross_profit += profit
+
+            medicine_id = item.medicine_id
+            if medicine_id not in medicine_stats:
+                medicine_stats[medicine_id] = {
+                    "medicine_id": medicine_id,
+                    "medicine_name": item.medicine.name,
+                    "quantity_sold": 0,
+                    "revenue": Decimal("0"),
+                    "cogs": Decimal("0"),
+                    "gross_profit": Decimal("0"),
+                }
+
+            medicine_stats[medicine_id]["quantity_sold"] += item.quantity
+            medicine_stats[medicine_id]["revenue"] += revenue
+            medicine_stats[medicine_id]["cogs"] += cogs
+            medicine_stats[medicine_id]["gross_profit"] += profit
+
+    # Calculate profit margins
+    for stats in medicine_stats.values():
+        if stats["revenue"] > 0:
+            stats["profit_margin"] = (stats["gross_profit"] / stats["revenue"]) * 100
+        else:
+            stats["profit_margin"] = 0
+        # Convert decimals to strings for JSON
+        stats["revenue"] = str(stats["revenue"])
+        stats["cogs"] = str(stats["cogs"])
+        stats["gross_profit"] = str(stats["gross_profit"])
+        stats["profit_margin"] = round(stats["profit_margin"], 2)
+
+    overall_margin = (
+        (total_gross_profit / total_revenue) * 100 if total_revenue > 0 else 0
+    )
+
+    return JsonResponse(
+        {
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "summary": {
+                "total_revenue": str(total_revenue),
+                "total_cogs": str(total_cogs),
+                "total_gross_profit": str(total_gross_profit),
+                "overall_margin": round(overall_margin, 2),
+                "total_sales": sales.count(),
+            },
+            "medicine_breakdown": list(medicine_stats.values()),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_inventory_valuation(request):
+    """
+    Report: Current inventory valuation by medicine.
+    Shows current stock levels and values using the costing method.
+    """
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    # Get all inventory valuations with related medicine
+    valuations = InventoryValuation.objects.select_related("medicine").all()
+
+    total_value = Decimal("0")
+    total_quantity = 0
+    medicines = []
+
+    for val in valuations:
+        total_value += val.total_value
+        total_quantity += val.total_quantity
+
+        medicines.append(
+            {
+                "medicine_id": val.medicine_id,
+                "medicine_name": val.medicine.name,
+                "costing_method": val.medicine.costing_method,
+                "quantity": val.total_quantity,
+                "average_cost": str(val.average_cost),
+                "total_value": str(val.total_value),
+            }
+        )
+
+    return JsonResponse(
+        {
+            "as_of": timezone.now().isoformat(),
+            "total_inventory_value": str(total_value),
+            "total_inventory_quantity": total_quantity,
+            "medicine_count": len(medicines),
+            "medicines": medicines,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_medicine_cost_layers(request, medicine_id: int):
+    """
+    Report: Cost layer detail for a specific medicine.
+    Shows all active cost layers and their remaining quantities.
+    """
+    denied = _require_roles(request, {"admin", "manager", "pharmacist"})
+    if denied:
+        return denied
+
+    try:
+        medicine = Medicine.objects.get(id=medicine_id)
+    except Medicine.DoesNotExist:
+        return JsonResponse({"error": "Medicine not found"}, status=404)
+
+    # Get cost layers
+    layers = CostLayer.objects.filter(medicine=medicine).order_by("sequence_number")
+
+    active_layers = []
+    depleted_layers = []
+
+    for layer in layers:
+        layer_data = {
+            "layer_id": layer.id,
+            "sequence_number": layer.sequence_number,
+            "original_quantity": layer.original_quantity,
+            "remaining_quantity": layer.remaining_quantity,
+            "unit_cost": str(layer.unit_cost),
+            "total_value": str(layer.total_value),
+            "expiry_date": layer.expiry_date.isoformat() if layer.expiry_date else None,
+            "received_at": layer.received_at.isoformat(),
+            "is_active": layer.is_active,
+        }
+
+        if layer.remaining_quantity > 0:
+            active_layers.append(layer_data)
+        else:
+            depleted_layers.append(layer_data)
+
+    # Get inventory valuation
+    try:
+        valuation = medicine.valuation
+        valuation_data = {
+            "total_quantity": valuation.total_quantity,
+            "total_value": str(valuation.total_value),
+            "average_cost": str(valuation.average_cost),
+        }
+    except InventoryValuation.DoesNotExist:
+        valuation_data = {
+            "total_quantity": 0,
+            "total_value": "0",
+            "average_cost": "0",
+        }
+
+    return JsonResponse(
+        {
+            "medicine_id": medicine.id,
+            "medicine_name": medicine.name,
+            "costing_method": medicine.costing_method,
+            "valuation": valuation_data,
+            "active_layers": active_layers,
+            "depleted_layers": depleted_layers,
+            "total_layers": layers.count(),
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_profit_by_medicine(request):
+    """
+    Report: Profit analysis by medicine.
+    Query params: start_date, end_date, min_quantity (optional)
+    """
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    start_date_str = request.GET.get("start_date")
+    end_date_str = request.GET.get("end_date")
+    min_quantity = request.GET.get("min_quantity", 0)
+
+    if not start_date_str or not end_date_str:
+        return JsonResponse(
+            {"error": "start_date and end_date are required (YYYY-MM-DD)"}, status=400
+        )
+
+    try:
+        start_date = parse_date(start_date_str)
+        end_date = parse_date(end_date_str)
+        min_qty = int(min_quantity)
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid parameters"}, status=400)
+
+    # Get sale items with cost data
+    sale_items = SaleItem.objects.filter(
+        sale__status=Sale.STATUS_POSTED,
+        sale__updated_at__date__gte=start_date,
+        sale__updated_at__date__lte=end_date,
+    ).select_related("medicine", "sale")
+
+    medicine_data = {}
+
+    for item in sale_items:
+        med_id = item.medicine_id
+        if med_id not in medicine_data:
+            medicine_data[med_id] = {
+                "medicine_id": med_id,
+                "medicine_name": item.medicine.name,
+                "total_quantity": 0,
+                "total_revenue": Decimal("0"),
+                "total_cogs": Decimal("0"),
+                "total_profit": Decimal("0"),
+                "sale_count": 0,
+            }
+
+        medicine_data[med_id]["total_quantity"] += item.quantity
+        medicine_data[med_id]["total_revenue"] += item.subtotal
+        medicine_data[med_id]["total_cogs"] += item.calculated_cost or Decimal("0")
+        medicine_data[med_id]["sale_count"] += 1
+
+    # Calculate derived metrics and filter
+    results = []
+    for data in medicine_data.values():
+        if data["total_quantity"] >= min_qty:
+            data["total_profit"] = data["total_revenue"] - data["total_cogs"]
+            data["profit_margin"] = (
+                (data["total_profit"] / data["total_revenue"]) * 100
+                if data["total_revenue"] > 0
+                else 0
+            )
+            data["avg_unit_profit"] = (
+                data["total_profit"] / data["total_quantity"]
+                if data["total_quantity"] > 0
+                else 0
+            )
+
+            # Convert decimals to strings
+            data["total_revenue"] = str(data["total_revenue"])
+            data["total_cogs"] = str(data["total_cogs"])
+            data["total_profit"] = str(data["total_profit"])
+            data["profit_margin"] = round(data["profit_margin"], 2)
+            data["avg_unit_profit"] = str(round(data["avg_unit_profit"], 2))
+
+            results.append(data)
+
+    # Sort by profit descending
+    results.sort(key=lambda x: float(x["total_profit"]), reverse=True)
+
+    return JsonResponse(
+        {
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "medicine_count": len(results),
+            "medicines": results,
+        }
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_medicine_profit_trend(request, medicine_id: int):
+    """
+    Report: Profit trend for a specific medicine over time.
+    Query params: start_date, end_date, group_by (day/week/month)
+    """
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    try:
+        medicine = Medicine.objects.get(id=medicine_id)
+    except Medicine.DoesNotExist:
+        return JsonResponse({"error": "Medicine not found"}, status=404)
+
+    start_date_str = request.GET.get("start_date")
+    end_date_str = request.GET.get("end_date")
+    group_by = request.GET.get("group_by", "day")  # day, week, month
+
+    if not start_date_str or not end_date_str:
+        return JsonResponse(
+            {"error": "start_date and end_date are required (YYYY-MM-DD)"}, status=400
+        )
+
+    try:
+        start_date = parse_date(start_date_str)
+        end_date = parse_date(end_date_str)
+    except (ValueError, TypeError):
+        return JsonResponse({"error": "Invalid date format"}, status=400)
+
+    sale_items = SaleItem.objects.filter(
+        medicine=medicine,
+        sale__status=Sale.STATUS_POSTED,
+        sale__updated_at__date__gte=start_date,
+        sale__updated_at__date__lte=end_date,
+    ).select_related("sale")
+
+    from collections import defaultdict
+
+    periods = defaultdict(lambda: {"revenue": Decimal("0"), "cogs": Decimal("0"), "quantity": 0})
+
+    for item in sale_items:
+        sale_date = item.sale.updated_at.date()
+
+        if group_by == "week":
+            period_key = sale_date.strftime("%Y-W%W")
+        elif group_by == "month":
+            period_key = sale_date.strftime("%Y-%m")
+        else:
+            period_key = sale_date.isoformat()
+
+        periods[period_key]["revenue"] += item.subtotal
+        periods[period_key]["cogs"] += item.calculated_cost or Decimal("0")
+        periods[period_key]["quantity"] += item.quantity
+
+    trend_data = []
+    for period in sorted(periods.keys()):
+        data = periods[period]
+        profit = data["revenue"] - data["cogs"]
+        margin = (profit / data["revenue"] * 100) if data["revenue"] > 0 else 0
+
+        trend_data.append(
+            {
+                "period": period,
+                "revenue": str(data["revenue"]),
+                "cogs": str(data["cogs"]),
+                "profit": str(profit),
+                "profit_margin": round(margin, 2),
+                "quantity_sold": data["quantity"],
+            }
+        )
+
+    return JsonResponse(
+        {
+            "medicine_id": medicine.id,
+            "medicine_name": medicine.name,
+            "group_by": group_by,
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+            "trend": trend_data,
+        }
+    )
+
+

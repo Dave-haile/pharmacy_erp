@@ -107,9 +107,31 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    path: "/users",
-    label: "User Management",
-    icon: "M17 20h5V4H2v16h5m10 0v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2m12 0H7m6-10a4 4 0 11-8 0 4 4 0 018 0z",
+    path: "/system",
+    label: "System Management",
+    icon: "M9.75 3a1.5 1.5 0 014.5 0l.345 1.036a1.5 1.5 0 001.424 1.026h1.089a1.5 1.5 0 011.299 2.25l-.545.944a1.5 1.5 0 000 1.5l.545.944a1.5 1.5 0 01-1.299 2.25h-1.089a1.5 1.5 0 00-1.424 1.026L14.25 21a1.5 1.5 0 01-4.5 0l-.345-1.036a1.5 1.5 0 00-1.424-1.026H6.892a1.5 1.5 0 01-1.299-2.25l.545-.944a1.5 1.5 0 000-1.5l-.545-.944a1.5 1.5 0 011.299-2.25h1.089A1.5 1.5 0 009.405 4.036L9.75 3zM12 15.75A3.75 3.75 0 1012 8.25a3.75 3.75 0 000 7.5z",
+    subItems: [
+      {
+        path: "/system",
+        label: "System Hub",
+        icon: "M3 5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25v13.5A2.25 2.25 0 0118.75 21H5.25A2.25 2.25 0 013 18.75V5.25zm4.5 1.5h9m-9 5.25h9m-9 5.25h5.25",
+      },
+      {
+        path: "/users",
+        label: "User Management",
+        icon: "M17 20h5V4H2v16h5m10 0v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2m12 0H7m6-10a4 4 0 11-8 0 4 4 0 018 0z",
+      },
+      {
+        path: "/inventory/medicines/import",
+        label: "Medicine Import",
+        icon: "M12 16V4m0 0l-4 4m4-4l4 4M4 20h16",
+      },
+      {
+        path: "/audit-logs",
+        label: "Audit Logs",
+        icon: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
+      },
+    ],
   },
   {
     path: "/audit-logs",
@@ -208,51 +230,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               location.pathname === item.path ||
               (item.subItems && location.pathname.startsWith(item.path));
             const isExpanded = expandedMenus.includes(item.label);
-            // {navItems.map((item) => {
-            //   const isActive =
-            //     location.pathname === item.path ||
-            //     (item.path !== "/" &&
-            //       location.pathname.startsWith(`${item.path}/`));
-            // return (
-            //   <Link
-            //     key={item.path}
-            //     to={item.path}
-            //     onClick={() => setIsMobileOpen(false)}
-            //     title={isCollapsed ? item.label : ""}
-            //     className={`flex items-center rounded-lg transition-all duration-200 group relative ${
-            //       isCollapsed
-            //         ? "justify-center p-1.5"
-            //         : "space-x-2 px-2.5 py-1.5"
-            //     } ${
-            //       isActive
-            //         ? "bg-emerald-600 text-white shadow-lg shadow-emerald-900/20"
-            //         : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
-            //     }`}
-            //   >
-            //     <svg
-            //       className={`w-4 h-4 shrink-0 ${isActive ? "text-white" : "text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300"}`}
-            //       fill="none"
-            //       stroke="currentColor"
-            //       viewBox="0 0 24 24"
-            //     >
-            //       <path
-            //         strokeLinecap="round"
-            //         strokeLinejoin="round"
-            //         strokeWidth="2"
-            //         d={item.icon}
-            //       />
-            //     </svg>
-            //     {!isCollapsed && (
-            //       <span className="text-xs font-medium whitespace-nowrap">
-            //         {item.label}
-            //       </span>
-            //     )}
-
-            //     {isCollapsed && isActive && (
-            //       <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full" />
-            //     )}
-            //   </Link>
-            // );
             return (
               <div key={item.path} className="space-y-0.5">
                 {item.subItems && !isCollapsed ? (
@@ -383,98 +360,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             );
           })}
         </nav>
-
-        <div className="px-2.5 py-1.5">
-          {/* <div
-            className={`bg-slate-100 dark:bg-slate-800/50 rounded-lg p-0.5 flex items-center ${isCollapsed ? "flex-col space-y-0.5" : "space-x-0.5"}`}
-          >
-            <button
-              onClick={() => setTheme("light")}
-              title="Light Mode"
-              className={`flex-1 flex items-center justify-center p-1 rounded-md transition-all ${
-                theme === "light"
-                  ? "bg-white text-slate-900 shadow-sm"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M16.95 16.95l.707.707M7.05 7.05l.707.707M12 8a4 4 0 100 8 4 4 0 000-8z"
-                />
-              </svg>
-              {!isCollapsed && (
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider">
-                  Light
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setTheme("dark")}
-              title="Dark Mode"
-              className={`flex-1 flex items-center justify-center p-1 rounded-md transition-all ${
-                theme === "dark"
-                  ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                />
-              </svg>
-              {!isCollapsed && (
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider">
-                  Dark
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => setTheme("system")}
-              title="System Theme"
-              className={`flex-1 flex items-center justify-center p-1 rounded-md transition-all ${
-                theme === "system"
-                  ? "bg-slate-700 text-white shadow-sm"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              }`}
-            >
-              <svg
-                className="w-3 h-3"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                />
-              </svg>
-              {!isCollapsed && (
-                <span className="ml-2 text-[10px] font-bold uppercase tracking-wider">
-                  Auto
-                </span>
-              )}
-            </button>
-          </div> */}
-        </div>
-
         <div
           className={`p-2.5 border-t border-slate-200 dark:border-slate-800 ${isCollapsed ? "flex justify-center" : ""}`}
         >
