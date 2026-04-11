@@ -90,7 +90,7 @@ const UserCreate: React.FC = () => {
     try {
       const created = await createUser(formData);
       showSuccess("User created successfully.");
-      navigate(`/users/${created.email}`);
+      navigate(`/system/users/${created.email}`);
     } catch (error) {
       const message =
         error &&
@@ -102,7 +102,9 @@ const UserCreate: React.FC = () => {
             (error.response as { data?: { error?: string; message?: string } })
               ?.data?.message
           : "Failed to create user.";
-      showError(message);
+      showError(
+        message || "An unknown error occurred while creating the user.",
+      );
     } finally {
       setIsSaving(false);
     }
@@ -119,7 +121,7 @@ const UserCreate: React.FC = () => {
         </p>
         <button
           type="button"
-          onClick={() => navigate("/users")}
+          onClick={() => navigate("/system/users")}
           className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white"
         >
           Back to Users
@@ -132,7 +134,7 @@ const UserCreate: React.FC = () => {
     <div className="w-full space-y-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <header className="flex items-center space-x-3">
         <button
-          onClick={() => navigate("/users")}
+          onClick={() => navigate("/system/users")}
           className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 shadow-sm transition-all hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           <ChevronLeft className="h-4 w-4" />
@@ -234,7 +236,7 @@ const UserCreate: React.FC = () => {
         <div className="mt-8 flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={() => navigate("/users")}
+            onClick={() => navigate("/system/users")}
             className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-600 transition-all hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             <X className="h-3.5 w-3.5" />

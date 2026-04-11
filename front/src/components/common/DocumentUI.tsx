@@ -7,12 +7,12 @@ export type DocumentSelectTriggerProps = {
   label?: string;
 };
 
-const accentClassMap: Record<AccentTone, string> = {
-  emerald: "from-emerald-500/90 via-emerald-500/70 to-emerald-400/60",
-  blue: "from-sky-500/90 via-blue-500/70 to-cyan-400/60",
-  amber: "from-amber-500/90 via-orange-500/70 to-yellow-400/60",
-  slate: "from-slate-500/90 via-slate-400/70 to-slate-300/60",
-};
+// const accentClassMap: Record<AccentTone, string> = {
+//   emerald: "from-emerald-500/90 via-emerald-500/70 to-emerald-400/60",
+//   blue: "from-sky-500/90 via-blue-500/70 to-cyan-400/60",
+//   amber: "from-amber-500/90 via-orange-500/70 to-yellow-400/60",
+//   slate: "from-slate-500/90 via-slate-400/70 to-slate-300/60",
+// };
 
 const summaryToneMap: Record<AccentTone, string> = {
   emerald:
@@ -128,7 +128,6 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   title,
   description,
   action,
-  accent = "slate",
   children,
   className = "",
   contentClassName = "",
@@ -136,7 +135,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
   <section
     className={`relative overflow-visible rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`.trim()}
   >
-    <div className={`h-1 w-full bg-gradient-to-r ${accentClassMap[accent]}`} />
+    <div className={`h-1 w-full bg-linear-to-r`} />
     {(title || description || action) && (
       <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 dark:border-slate-800 md:flex-row md:items-start md:justify-between md:px-6">
         <div>
@@ -159,7 +158,7 @@ export const DocumentCard: React.FC<DocumentCardProps> = ({
 );
 
 interface DocumentFieldProps {
-  label: string;
+  label: string | ReactNode;
   hint?: string;
   children: ReactNode;
 }

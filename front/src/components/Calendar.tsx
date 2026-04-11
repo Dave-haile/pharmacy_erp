@@ -258,7 +258,7 @@ const Calendar: FC<CalendarProps> = ({
 
   return (
     <div
-      className={`w-[260px] bg-[#ffffff] dark:bg-[#1e293b] border border-[#e2e8f0] dark:border-[#1e293b] rounded-2xl p-4 shadow-2xl shadow-black/10 dark:shadow-black/50 overflow-hidden ${className}`}
+      className={`w-65 bg-[#ffffff] dark:bg-slate-950 border border-[#e2e8f0] dark:border-[#1e293b] rounded-2xl p-4 shadow-2xl shadow-black/10 dark:shadow-black/50 overflow-hidden ${className}`}
     >
       <header className="flex items-center justify-between mb-3">
         {getHeaderLabel()}

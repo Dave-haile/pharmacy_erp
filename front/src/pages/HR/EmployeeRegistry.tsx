@@ -43,6 +43,7 @@ const EmployeeRegistry: React.FC = () => {
   const [filters, setFilters] = useState<EmployeeFilters>({
     search: "",
     department: "",
+    designation: "",
     status: "",
     employment_type: "",
     include_inactive: "",
@@ -176,6 +177,10 @@ const EmployeeRegistry: React.FC = () => {
             <Phone className="h-3.5 w-3.5 text-slate-400" />
             <span>{item.phone}</span>
           </div>
+          <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+            <Shield className="h-3.5 w-3.5 text-slate-400" />
+            <span>{item.user_email || "No linked user"}</span>
+          </div>
         </div>
       ),
     },
@@ -210,7 +215,7 @@ const EmployeeRegistry: React.FC = () => {
 
   const filterUI = (
     <div className="flex flex-col space-y-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
         <div className="relative lg:col-span-2">
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <TextInput
@@ -221,7 +226,6 @@ const EmployeeRegistry: React.FC = () => {
               setCurrentPage(1);
             }}
             placeholder="Search employee, email, phone, or series..."
-            size="sm"
             hasIcon
             className="placeholder:text-slate-400"
           />
@@ -232,12 +236,25 @@ const EmployeeRegistry: React.FC = () => {
             setFilters((prev) => ({ ...prev, department: e.target.value }));
             setCurrentPage(1);
           }}
-          size="sm"
         >
           <option value="">All departments</option>
           {meta?.departments.map((department) => (
             <option key={department} value={department}>
               {department}
+            </option>
+          ))}
+        </SelectInput>
+        <SelectInput
+          value={filters.designation || ""}
+          onChange={(e) => {
+            setFilters((prev) => ({ ...prev, designation: e.target.value }));
+            setCurrentPage(1);
+          }}
+        >
+          <option value="">All designations</option>
+          {meta?.designations.map((designation) => (
+            <option key={designation} value={designation}>
+              {designation}
             </option>
           ))}
         </SelectInput>
@@ -250,7 +267,6 @@ const EmployeeRegistry: React.FC = () => {
             }));
             setCurrentPage(1);
           }}
-          size="sm"
         >
           <option value="">All statuses</option>
           {meta?.statuses.map((status) => (
@@ -269,7 +285,6 @@ const EmployeeRegistry: React.FC = () => {
             }));
             setCurrentPage(1);
           }}
-          size="sm"
         >
           <option value="">All employment types</option>
           {meta?.employment_types.map((employmentType) => (

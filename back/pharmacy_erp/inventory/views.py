@@ -24,6 +24,8 @@ from tables.model_definitions import (
     Batches,
     Category,
     CostLayer,
+    ExpiryConfig,
+    ExpiryNotification,
     GoodRecivingNote,
     GoodRecivingNoteItem,
     Inventory,
@@ -32,6 +34,8 @@ from tables.model_definitions import (
     Purchase,
     PurchaseItem,
     PrintFormat,
+    ReorderAlert,
+    ReorderConfig,
     Sale,
     SaleItem,
     SalesReturn,
@@ -41,6 +45,8 @@ from tables.model_definitions import (
     StockEntry,
     StockEntryItem,
     StockLedger,
+    StockTake,
+    StockTakeItem,
     Supplier,
     SupplierReturn,
     SupplierReturnItem,
@@ -7030,5 +7036,759 @@ def report_medicine_profit_trend(request, medicine_id: int):
             "trend": trend_data,
         }
     )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def report_inventory_status(request):
+    """
+    Comprehensive inventory status report with item details,
+    category valuation, and summary statistics.
+    """
+    expiry_soon_days = _get_inventory_threshold(
+        request,
+        "expiry_soon_days",
+        EXPIRY_SOON_DEFAULT_DAYS,
+    )
+    low_stock_threshold = _get_inventory_threshold(
+        request,
+        "low_stock_threshold",
+        LOW_STOCK_DEFAULT_THRESHOLD,
+        minimum=1,
+        maximum=10000,
+    )
+
+    try:
+        page = int(request.GET.get("page", 1))
+        page_size = int(request.GET.get("page_size", 20))
+    except (TypeError, ValueError):
+        page = 1
+        page_size = 20
+
+    page_size = max(1, min(page_size, 100))
+    page = max(1, page)
+
+    snapshot = _build_inventory_snapshot(
+        expiry_soon_days,
+        low_stock_threshold,
+    )
+    items = snapshot["items"]
+
+    # Apply filters
+    search_query = _compact_text(request.GET.get("search", "")).lower()
+    category_filter = _compact_text(request.GET.get("category", "")).lower()
+    status_filter = _compact_text(request.GET.get("status", "")).lower()
+
+    if search_query:
+        items = [
+            item
+            for item in items
+            if search_query in item["medicine_name"].lower()
+            or search_query in item["generic_name"].lower()
+            or search_query in item["batch_number"].lower()
+        ]
+
+    if category_filter:
+        items = [item for item in items if item["category"].lower() == category_filter]
+
+    if status_filter:
+        normalized_status = status_filter.replace(" ", "_")
+        items = [
+            item
+            for item in items
+            if item["status_key"] == normalized_status
+            or item["status"].lower() == status_filter
+        ]
+
+    # Calculate statistics
+    total_items = len(items)
+    in_stock_count = sum(1 for item in items if item["status_key"] == "in_stock")
+    low_stock_count = sum(1 for item in items if item["status_key"] == "low_stock")
+    expiring_soon_count = sum(1 for item in items if item["status_key"] == "expiring_soon")
+    expired_count = sum(1 for item in items if item["status_key"] == "expired")
+    out_of_stock_count = sum(1 for item in items if item["quantity"] == 0)
+
+    # Calculate total valuation
+    total_valuation = sum(
+        Decimal(item["unit_cost"]) * Decimal(str(item["quantity"]))
+        for item in items
+    )
+
+    # Category-wise valuation
+    category_totals = {}
+    for item in items:
+        category = item["category"] or "Uncategorized"
+        if category not in category_totals:
+            category_totals[category] = {
+                "name": category,
+                "value": Decimal("0"),
+                "quantity": 0,
+                "item_count": 0,
+            }
+        item_value = Decimal(item["unit_cost"]) * Decimal(str(item["quantity"]))
+        category_totals[category]["value"] += item_value
+        category_totals[category]["quantity"] += item["quantity"]
+        category_totals[category]["item_count"] += 1
+
+    category_valuation = [
+        {
+            "name": data["name"],
+            "value": str(data["value"]),
+            "quantity": data["quantity"],
+            "item_count": data["item_count"],
+        }
+        for data in sorted(
+            category_totals.values(),
+            key=lambda x: x["value"],
+            reverse=True,
+        )
+    ]
+
+    # Paginate items
+    total_count = len(items)
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    paginated_items = items[start_idx:end_idx]
+
+    # Get unique categories for filter dropdown
+    categories = sorted(set(item["category"] for item in snapshot["items"] if item["category"]))
+
+    return JsonResponse(
+        {
+            "generated_at": timezone.now().isoformat(),
+            "summary": {
+                "total_items": snapshot["summary"]["total_batches"],
+                "total_medicines": snapshot["summary"]["total_medicines"],
+                "total_quantity": snapshot["summary"]["total_quantity"],
+                "total_valuation": str(total_valuation),
+                "in_stock_count": in_stock_count,
+                "low_stock_count": low_stock_count,
+                "expiring_soon_count": expiring_soon_count,
+                "expired_count": expired_count,
+                "out_of_stock_count": out_of_stock_count,
+                "expiry_soon_days": expiry_soon_days,
+                "low_stock_threshold": low_stock_threshold,
+            },
+            "stock_distribution": [
+                {"name": "In Stock", "value": in_stock_count, "color": "#10b981"},
+                {"name": "Low Stock", "value": low_stock_count, "color": "#f59e0b"},
+                {"name": "Expiring Soon", "value": expiring_soon_count, "color": "#f59e0b"},
+                {"name": "Expired", "value": expired_count, "color": "#ef4444"},
+            ],
+            "category_valuation": category_valuation,
+            "items": paginated_items,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total_count": total_count,
+                "total_pages": (total_count + page_size - 1) // page_size,
+            },
+            "filters": {
+                "categories": categories,
+                "statuses": ["in_stock", "low_stock", "expiring_soon", "expired"],
+            },
+        }
+    )
+
+
+# ============== STOCK TAKE VIEWS ==============
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stock_takes_list(request):
+    """List all stock takes."""
+    queryset = StockTake.objects.select_related("created_by").prefetch_related("items")
+    status_filter = _compact_text(request.GET.get("status", ""))
+    if status_filter:
+        queryset = queryset.filter(status__iexact=status_filter)
+    queryset = queryset.order_by("-created_at")
+    results = [
+        {
+            "id": st.id,
+            "posting_number": st.posting_number,
+            "title": st.title,
+            "status": st.status,
+            "status_label": st.get_status_display(),
+            "notes": st.notes,
+            "started_at": st.started_at.isoformat() if st.started_at else None,
+            "completed_at": st.completed_at.isoformat() if st.completed_at else None,
+            "created_by": st.created_by_id,
+            "created_by_name": getattr(st.created_by, "username", None),
+            "totals": st.calculate_totals(),
+            "created_at": st.created_at.isoformat(),
+        }
+        for st in queryset
+    ]
+    return JsonResponse({"count": len(results), "results": results})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_take_create(request):
+    """Create a new stock take."""
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    title = _compact_text(request.data.get("title", ""))
+    notes = request.data.get("notes", "")
+
+    if not title:
+        return JsonResponse({"error": "Title is required."}, status=400)
+
+    stock_take = StockTake.objects.create(
+        title=title,
+        notes=notes,
+        status=StockTake.STATUS_DRAFT,
+        created_by=request.user,
+    )
+
+    UserLog.objects.create(
+        user=request.user,
+        action="Stock Take Created",
+        details=json.dumps(
+            {"posting_number": stock_take.posting_number, "title": stock_take.title},
+            default=str,
+        ),
+    )
+
+    return JsonResponse(
+        {
+            "id": stock_take.id,
+            "posting_number": stock_take.posting_number,
+            "title": stock_take.title,
+            "status": stock_take.status,
+            "message": "Stock take created successfully.",
+        },
+        status=201,
+    )
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def stock_take_detail(request, stock_take_id):
+    """Get stock take details with items."""
+    try:
+        stock_take = StockTake.objects.prefetch_related("items__medicine", "items__batch").get(
+            id=stock_take_id
+        )
+    except StockTake.DoesNotExist:
+        return JsonResponse({"error": "Stock take not found."}, status=404)
+
+    items = [
+        {
+            "id": item.id,
+            "medicine_id": item.medicine_id,
+            "medicine_name": item.medicine.name,
+            "medicine_barcode": item.medicine.barcode,
+            "batch_id": item.batch_id,
+            "batch_number": item.batch.batch_number if item.batch else None,
+            "system_quantity": str(item.system_quantity),
+            "counted_quantity": str(item.counted_quantity),
+            "variance": str(item.variance),
+            "variance_percentage": round(item.variance_percentage, 2),
+            "variance_status": item.variance_status,
+            "unit_cost": str(item.unit_cost) if item.unit_cost else None,
+            "notes": item.notes,
+            "counted_by": item.counted_by_id,
+            "counted_by_name": getattr(item.counted_by, "username", None) if item.counted_by else None,
+            "counted_at": item.counted_at.isoformat() if item.counted_at else None,
+        }
+        for item in stock_take.items.all()
+    ]
+
+    return JsonResponse(
+        {
+            "id": stock_take.id,
+            "posting_number": stock_take.posting_number,
+            "title": stock_take.title,
+            "status": stock_take.status,
+            "status_label": stock_take.get_status_display(),
+            "notes": stock_take.notes,
+            "started_at": stock_take.started_at.isoformat() if stock_take.started_at else None,
+            "completed_at": stock_take.completed_at.isoformat() if stock_take.completed_at else None,
+            "created_by": stock_take.created_by_id,
+            "created_by_name": getattr(stock_take.created_by, "username", None),
+            "totals": stock_take.calculate_totals(),
+            "items": items,
+            "created_at": stock_take.created_at.isoformat(),
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_take_start(request, stock_take_id):
+    """Start a stock take (add items from current inventory)."""
+    try:
+        stock_take = StockTake.objects.get(id=stock_take_id)
+    except StockTake.DoesNotExist:
+        return JsonResponse({"error": "Stock take not found."}, status=404)
+
+    if stock_take.status != StockTake.STATUS_DRAFT:
+        return JsonResponse(
+            {"error": "Stock take must be in Draft status to start."}, status=400
+        )
+
+    # Get current inventory snapshot
+    batches = Batches.objects.filter(quantity__gt=0).select_related(
+        "product_id", "supplier_id"
+    )
+
+    items_created = 0
+    for batch in batches:
+        StockTakeItem.objects.create(
+            stock_take=stock_take,
+            medicine=batch.product_id,
+            batch=batch,
+            system_quantity=batch.quantity,
+            counted_quantity=0,
+            unit_cost=batch.purchase_price,
+        )
+        items_created += 1
+
+    stock_take.status = StockTake.STATUS_IN_PROGRESS
+    stock_take.started_at = timezone.now()
+    stock_take.save()
+
+    UserLog.objects.create(
+        user=request.user,
+        action="Stock Take Started",
+        details=json.dumps(
+            {
+                "posting_number": stock_take.posting_number,
+                "items_count": items_created,
+            },
+            default=str,
+        ),
+    )
+
+    return JsonResponse(
+        {
+            "message": "Stock take started successfully.",
+            "items_created": items_created,
+            "status": stock_take.status,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_take_count_item(request, stock_take_id, item_id):
+    """Record counted quantity for a stock take item."""
+    try:
+        stock_take = StockTake.objects.get(id=stock_take_id)
+    except StockTake.DoesNotExist:
+        return JsonResponse({"error": "Stock take not found."}, status=404)
+
+    if stock_take.status != StockTake.STATUS_IN_PROGRESS:
+        return JsonResponse(
+            {"error": "Stock take must be in progress to count items."}, status=400
+        )
+
+    try:
+        item = StockTakeItem.objects.get(id=item_id, stock_take=stock_take)
+    except StockTakeItem.DoesNotExist:
+        return JsonResponse({"error": "Stock take item not found."}, status=404)
+
+    counted_quantity = request.data.get("counted_quantity")
+    if counted_quantity is None:
+        return JsonResponse({"error": "counted_quantity is required."}, status=400)
+
+    try:
+        counted_quantity = Decimal(str(counted_quantity))
+    except (TypeError, ValueError, InvalidOperation):
+        return JsonResponse({"error": "Invalid counted_quantity value."}, status=400)
+
+    item.counted_quantity = counted_quantity
+    item.counted_by = request.user
+    item.counted_at = timezone.now()
+    item.notes = request.data.get("notes", item.notes)
+    item.save()
+
+    return JsonResponse(
+        {
+            "id": item.id,
+            "counted_quantity": str(item.counted_quantity),
+            "variance": str(item.variance),
+            "message": "Item counted successfully.",
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_take_complete(request, stock_take_id):
+    """Complete a stock take and apply adjustments if needed."""
+    try:
+        stock_take = StockTake.objects.get(id=stock_take_id)
+    except StockTake.DoesNotExist:
+        return JsonResponse({"error": "Stock take not found."}, status=404)
+
+    if stock_take.status != StockTake.STATUS_IN_PROGRESS:
+        return JsonResponse(
+            {"error": "Stock take must be in progress to complete."}, status=400
+        )
+
+    apply_adjustments = request.data.get("apply_adjustments", False)
+    adjustment_reason = request.data.get("adjustment_reason", "Stock Take Adjustment")
+
+    adjustments_made = 0
+    if apply_adjustments:
+        # Create stock adjustment for variance items
+        variance_items = [
+            item for item in stock_take.items.all() if item.variance != 0
+        ]
+
+        if variance_items:
+            adjustment = StockAdjustment.objects.create(
+                reason=StockAdjustment.REASON_OTHER,
+                status=StockAdjustment.STATUS_SUBMITTED,
+                created_by=request.user,
+                notes=f"Adjustment from Stock Take: {stock_take.posting_number}",
+            )
+
+            for item in variance_items:
+                StockAdjustmentItem.objects.create(
+                    adjustment=adjustment,
+                    medicine=item.medicine,
+                    batch=item.batch,
+                    quantity_before=item.system_quantity,
+                    quantity_after=item.counted_quantity,
+                    adjustment_reason=item.notes or adjustment_reason,
+                )
+
+                # Update batch quantity
+                if item.batch:
+                    item.batch.quantity = item.counted_quantity
+                    item.batch.save()
+
+            adjustments_made = len(variance_items)
+
+    stock_take.status = StockTake.STATUS_COMPLETED
+    stock_take.completed_at = timezone.now()
+    stock_take.save()
+
+    UserLog.objects.create(
+        user=request.user,
+        action="Stock Take Completed",
+        details=json.dumps(
+            {
+                "posting_number": stock_take.posting_number,
+                "adjustments_made": adjustments_made,
+                "apply_adjustments": apply_adjustments,
+            },
+            default=str,
+        ),
+    )
+
+    return JsonResponse(
+        {
+            "message": "Stock take completed successfully.",
+            "adjustments_made": adjustments_made,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def stock_take_cancel(request, stock_take_id):
+    """Cancel a stock take."""
+    try:
+        stock_take = StockTake.objects.get(id=stock_take_id)
+    except StockTake.DoesNotExist:
+        return JsonResponse({"error": "Stock take not found."}, status=404)
+
+    if stock_take.status == StockTake.STATUS_COMPLETED:
+        return JsonResponse(
+            {"error": "Cannot cancel a completed stock take."}, status=400
+        )
+
+    stock_take.status = StockTake.STATUS_CANCELLED
+    stock_take.save()
+
+    UserLog.objects.create(
+        user=request.user,
+        action="Stock Take Cancelled",
+        details=json.dumps(
+            {"posting_number": stock_take.posting_number}, default=str
+        ),
+    )
+
+    return JsonResponse({"message": "Stock take cancelled successfully."})
+
+
+# ============== REORDER ALERT VIEWS ==============
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def reorder_alerts_list(request):
+    """List active reorder alerts."""
+    status_filter = _compact_text(request.GET.get("status", ""))
+    priority_filter = _compact_text(request.GET.get("priority", ""))
+
+    queryset = ReorderAlert.objects.select_related("medicine", "acknowledged_by")
+
+    if status_filter:
+        queryset = queryset.filter(status__iexact=status_filter)
+    if priority_filter:
+        queryset = queryset.filter(priority__iexact=priority_filter)
+
+    queryset = queryset.order_by("-priority", "-triggered_at")
+
+    results = [
+        {
+            "id": alert.id,
+            "medicine_id": alert.medicine_id,
+            "medicine_name": alert.medicine.name,
+            "medicine_barcode": alert.medicine.barcode,
+            "current_stock": str(alert.current_stock),
+            "reorder_level": str(alert.reorder_level),
+            "shortage_quantity": str(alert.shortage_quantity),
+            "suggested_order_quantity": str(alert.suggested_order_quantity),
+            "status": alert.status,
+            "status_label": alert.get_status_display(),
+            "priority": alert.priority,
+            "priority_label": alert.get_priority_display(),
+            "notes": alert.notes,
+            "triggered_at": alert.triggered_at.isoformat(),
+            "acknowledged_at": alert.acknowledged_at.isoformat() if alert.acknowledged_at else None,
+            "acknowledged_by": alert.acknowledged_by_id,
+            "acknowledged_by_name": getattr(alert.acknowledged_by, "username", None) if alert.acknowledged_by else None,
+        }
+        for alert in queryset
+    ]
+
+    return JsonResponse({"count": len(results), "results": results})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def reorder_alert_acknowledge(request, alert_id):
+    """Acknowledge a reorder alert."""
+    try:
+        alert = ReorderAlert.objects.get(id=alert_id)
+    except ReorderAlert.DoesNotExist:
+        return JsonResponse({"error": "Reorder alert not found."}, status=404)
+
+    if alert.status != ReorderAlert.STATUS_ACTIVE:
+        return JsonResponse(
+            {"error": "Only active alerts can be acknowledged."}, status=400
+        )
+
+    alert.status = ReorderAlert.STATUS_ACKNOWLEDGED
+    alert.acknowledged_at = timezone.now()
+    alert.acknowledged_by = request.user
+    alert.notes = request.data.get("notes", alert.notes)
+    alert.save()
+
+    return JsonResponse({"message": "Alert acknowledged successfully."})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def reorder_alert_resolve(request, alert_id):
+    """Resolve a reorder alert."""
+    try:
+        alert = ReorderAlert.objects.get(id=alert_id)
+    except ReorderAlert.DoesNotExist:
+        return JsonResponse({"error": "Reorder alert not found."}, status=404)
+
+    alert.status = ReorderAlert.STATUS_RESOLVED
+    alert.resolved_at = timezone.now()
+    alert.notes = request.data.get("notes", alert.notes)
+    alert.save()
+
+    return JsonResponse({"message": "Alert resolved successfully."})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def reorder_configs_list(request):
+    """List reorder configurations."""
+    queryset = ReorderConfig.objects.select_related("medicine").order_by("medicine__name")
+    results = [
+        {
+            "id": config.id,
+            "medicine_id": config.medicine_id,
+            "medicine_name": config.medicine.name,
+            "reorder_level": str(config.reorder_level),
+            "safety_stock": str(config.safety_stock),
+            "reorder_quantity": str(config.reorder_quantity),
+            "lead_time_days": config.lead_time_days,
+            "is_active": config.is_active,
+        }
+        for config in queryset
+    ]
+    return JsonResponse({"count": len(results), "results": results})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def reorder_config_create(request):
+    """Create or update reorder configuration for a medicine."""
+    medicine_id = request.data.get("medicine_id")
+    if not medicine_id:
+        return JsonResponse({"error": "medicine_id is required."}, status=400)
+
+    try:
+        medicine = Medicine.objects.get(id=medicine_id)
+    except Medicine.DoesNotExist:
+        return JsonResponse({"error": "Medicine not found."}, status=404)
+
+    config, created = ReorderConfig.objects.update_or_create(
+        medicine=medicine,
+        defaults={
+            "reorder_level": request.data.get("reorder_level", 10),
+            "safety_stock": request.data.get("safety_stock", 5),
+            "reorder_quantity": request.data.get("reorder_quantity", 50),
+            "lead_time_days": request.data.get("lead_time_days", 7),
+            "is_active": request.data.get("is_active", True),
+        },
+    )
+
+    return JsonResponse(
+        {
+            "id": config.id,
+            "medicine_id": config.medicine_id,
+            "message": "Configuration saved successfully.",
+        }
+    )
+
+
+# ============== EXPIRY NOTIFICATION VIEWS ==============
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def expiry_notifications_list(request):
+    """List expiry notifications."""
+    status_filter = _compact_text(request.GET.get("status", ""))
+    priority_filter = _compact_text(request.GET.get("priority", ""))
+
+    queryset = ExpiryNotification.objects.select_related(
+        "medicine", "batch", "acknowledged_by", "actioned_by"
+    )
+
+    if status_filter:
+        queryset = queryset.filter(status__iexact=status_filter)
+    if priority_filter:
+        queryset = queryset.filter(priority__iexact=priority_filter)
+
+    queryset = queryset.order_by("expiry_date", "-priority")
+
+    results = [
+        {
+            "id": notif.id,
+            "batch_id": notif.batch_id,
+            "batch_number": notif.batch.batch_number,
+            "medicine_id": notif.medicine_id,
+            "medicine_name": notif.medicine.name,
+            "expiry_date": notif.expiry_date.isoformat(),
+            "days_to_expiry": notif.days_to_expiry,
+            "quantity_at_risk": str(notif.quantity_at_risk),
+            "total_value_at_risk": str(notif.total_value_at_risk) if notif.total_value_at_risk else None,
+            "status": notif.status,
+            "status_label": notif.get_status_display(),
+            "priority": notif.priority,
+            "priority_label": notif.get_priority_display(),
+            "is_expired": notif.is_expired,
+            "is_critical": notif.is_critical,
+            "notification_type": notif.notification_type,
+            "notes": notif.notes,
+            "action_taken": notif.action_taken,
+            "notified_at": notif.notified_at.isoformat(),
+            "acknowledged_at": notif.acknowledged_at.isoformat() if notif.acknowledged_at else None,
+            "actioned_at": notif.actioned_at.isoformat() if notif.actioned_at else None,
+        }
+        for notif in queryset
+    ]
+
+    return JsonResponse({"count": len(results), "results": results})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def expiry_notification_acknowledge(request, notification_id):
+    """Acknowledge an expiry notification."""
+    try:
+        notif = ExpiryNotification.objects.get(id=notification_id)
+    except ExpiryNotification.DoesNotExist:
+        return JsonResponse({"error": "Notification not found."}, status=404)
+
+    if notif.status != ExpiryNotification.STATUS_PENDING:
+        return JsonResponse(
+            {"error": "Only pending notifications can be acknowledged."}, status=400
+        )
+
+    notif.status = ExpiryNotification.STATUS_ACKNOWLEDGED
+    notif.acknowledged_at = timezone.now()
+    notif.acknowledged_by = request.user
+    notif.notes = request.data.get("notes", notif.notes)
+    notif.save()
+
+    return JsonResponse({"message": "Notification acknowledged successfully."})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def expiry_notification_action(request, notification_id):
+    """Mark an expiry notification as actioned."""
+    try:
+        notif = ExpiryNotification.objects.get(id=notification_id)
+    except ExpiryNotification.DoesNotExist:
+        return JsonResponse({"error": "Notification not found."}, status=404)
+
+    action_taken = request.data.get("action_taken", "")
+    if not action_taken:
+        return JsonResponse({"error": "action_taken is required."}, status=400)
+
+    notif.status = ExpiryNotification.STATUS_ACTIONED
+    notif.action_taken = action_taken
+    notif.actioned_at = timezone.now()
+    notif.actioned_by = request.user
+    notif.notes = request.data.get("notes", notif.notes)
+    notif.save()
+
+    return JsonResponse({"message": "Notification actioned successfully."})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def expiry_config_get(request):
+    """Get expiry configuration."""
+    config = ExpiryConfig.get_config()
+    return JsonResponse(
+        {
+            "id": config.id,
+            "name": config.name,
+            "warning_days": config.warning_days,
+            "critical_days": config.critical_days,
+            "notification_frequency_days": config.notification_frequency_days,
+            "auto_dispose_expired": config.auto_dispose_expired,
+            "is_active": config.is_active,
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def expiry_config_update(request):
+    """Update expiry configuration."""
+    denied = _require_roles(request, {"admin", "manager"})
+    if denied:
+        return denied
+
+    config = ExpiryConfig.get_config()
+    config.warning_days = request.data.get("warning_days", config.warning_days)
+    config.critical_days = request.data.get("critical_days", config.critical_days)
+    config.notification_frequency_days = request.data.get(
+        "notification_frequency_days", config.notification_frequency_days
+    )
+    config.auto_dispose_expired = request.data.get(
+        "auto_dispose_expired", config.auto_dispose_expired
+    )
+    config.save()
+
+    return JsonResponse({"message": "Configuration updated successfully."})
 
 

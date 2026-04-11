@@ -45,11 +45,17 @@ import SystemHub from "@/src/pages/Hub/SystemHub";
 import DepartmentDetails from "@/src/pages/HR/DepartmentDetails";
 import DepartmentForm from "@/src/pages/HR/DepartmentForm";
 import DepartmentRegistry from "@/src/pages/HR/DepartmentRegistry";
+import DesignationDetails from "@/src/pages/HR/DesignationDetails";
+import DesignationForm from "@/src/pages/HR/DesignationForm";
+import DesignationRegistry from "@/src/pages/HR/DesignationRegistry";
 import EmployeeRegistry from "@/src/pages/HR/EmployeeRegistry";
 import EmployeeEditor from "@/src/pages/HR/EmployeeEditor";
+import LeaveManagement from "@/src/pages/HR/Leave/LeaveManagement";
+import LeaveTypeRegistry from "@/src/pages/HR/Leave/LeaveTypeRegistry";
+import LeaveTypeForm from "@/src/pages/HR/Leave/LeaveTypeForm";
+import LeaveTypeDetails from "@/src/pages/HR/Leave/LeaveTypeDetails";
 import {
-  Attendance,
-  LeaveManagement,
+  // Attendance,
   Payroll,
   Performance,
 } from "@/src/pages/Leave/HRSubModules";
@@ -60,6 +66,14 @@ import ImportWizard from "@/src/pages/data-import/ImportWizard";
 import TableRegistryList from "@/src/pages/table-registry/TableRegistryList";
 import TableRegistryDetail from "@/src/pages/table-registry/TableRegistryDetail";
 import TableRegistryForm from "@/src/pages/table-registry/TableRegistryForm";
+import AttendanceRegistry from "@/src/pages/HR/Attendance/AttendanceRegistry";
+import AttendanceForm from "@/src/pages/HR/Attendance/AttendanceForm";
+import AttendanceDetails from "@/src/pages/HR/Attendance/AttendanceDetails";
+import StockTakeRegistry from "@/src/pages/inventory/StockTake/StockTakeRegistry";
+import StockTakeDetails from "@/src/pages/inventory/StockTake/StockTakeDetails";
+import StockTakeForm from "@/src/pages/inventory/StockTake/StockTakeForm";
+import ReorderAlertsPage from "@/src/pages/inventory/Alerts/ReorderAlertsPage";
+import ExpiryNotificationsPage from "@/src/pages/inventory/Alerts/ExpiryNotificationsPage";
 interface RouteConfig {
   key: string;
   name: string;
@@ -148,6 +162,58 @@ const routes: RouteConfig[] = [
     element: (
       <RouteGuard>
         <ValuationReport />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-takes",
+    name: "Stock Takes",
+    path: "/inventory/stock-takes",
+    element: (
+      <RouteGuard>
+        <StockTakeRegistry />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "stock-take-new",
+    name: "New Stock Take",
+    path: "/inventory/stock-takes/new",
+    element: (
+      <RouteGuard>
+        <StockTakeForm />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "stock-take-details",
+    name: "Stock Take Details",
+    path: "/inventory/stock-takes/:id",
+    element: (
+      <RouteGuard>
+        <StockTakeDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "reorder-alerts",
+    name: "Reorder Alerts",
+    path: "/inventory/reorder-alerts",
+    element: (
+      <RouteGuard>
+        <ReorderAlertsPage />
+      </RouteGuard>
+    ),
+  },
+  {
+    key: "expiry-notifications",
+    name: "Expiry Notifications",
+    path: "/inventory/expiry-notifications",
+    element: (
+      <RouteGuard>
+        <ExpiryNotificationsPage />
       </RouteGuard>
     ),
   },
@@ -495,7 +561,7 @@ const routes: RouteConfig[] = [
   {
     key: "users",
     name: "User Registry",
-    path: "/users",
+    path: "/system/users",
     element: (
       <RouteGuard>
         <UserRegistry />
@@ -505,7 +571,7 @@ const routes: RouteConfig[] = [
   {
     key: "create-user",
     name: "Create User",
-    path: "/users/new",
+    path: "/system/users/new",
     element: (
       <RouteGuard>
         <UserCreate />
@@ -515,7 +581,7 @@ const routes: RouteConfig[] = [
   {
     key: "user-details",
     name: "User Details",
-    path: "/users/:email",
+    path: "/system/users/:email",
     element: (
       <RouteGuard>
         <UserDetailsByEmail />
@@ -568,6 +634,39 @@ const routes: RouteConfig[] = [
     visible: false,
   },
   {
+    key: "hr-designations",
+    name: "Designations",
+    path: "/hr/designations",
+    element: (
+      <RouteGuard>
+        <DesignationRegistry />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-designations-new",
+    name: "Designation New",
+    path: "/hr/designations/new",
+    element: (
+      <RouteGuard>
+        <DesignationForm />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-designations-details",
+    name: "Designation Details",
+    path: "/hr/designations/:designationId",
+    element: (
+      <RouteGuard>
+        <DesignationDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
     key: "hr-employee",
     name: "Employee",
     path: "/hr/employees",
@@ -612,12 +711,67 @@ const routes: RouteConfig[] = [
     visible: false,
   },
   {
+    key: "hr-leave-types",
+    name: "Leave Types",
+    path: "/hr/leave-types",
+    element: (
+      <RouteGuard>
+        <LeaveTypeRegistry />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-leave-types-new",
+    name: "New Leave Type",
+    path: "/hr/leave-types/new",
+    element: (
+      <RouteGuard>
+        <LeaveTypeForm />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-leave-types-detail",
+    name: "Leave Type Detail",
+    path: "/hr/leave-types/:code",
+    element: (
+      <RouteGuard>
+        <LeaveTypeDetails />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
     key: "hr-attendance",
     name: "Attendance",
     path: "/hr/attendance",
     element: (
       <RouteGuard>
-        <Attendance />
+        <AttendanceRegistry />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-attendance-new",
+    name: "Attendance New",
+    path: "/hr/attendance/new",
+    element: (
+      <RouteGuard>
+        <AttendanceForm />
+      </RouteGuard>
+    ),
+    visible: false,
+  },
+  {
+    key: "hr-attendance-detail",
+    name: "Attendance Detail",
+    path: "/hr/attendance/:naming_series",
+    element: (
+      <RouteGuard>
+        <AttendanceDetails />
       </RouteGuard>
     ),
     visible: false,

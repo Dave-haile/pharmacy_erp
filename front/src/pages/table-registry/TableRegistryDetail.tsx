@@ -138,9 +138,7 @@ const TableRegistryDetail: React.FC = () => {
 
         <div className="flex items-center space-x-3">
           <button
-            onClick={() =>
-              navigate(`/system/table-registry/${tableCode}/edit`)
-            }
+            onClick={() => navigate(`/system/table-registry/${tableCode}/edit`)}
             className="flex items-center space-x-2 px-6 py-3 bg-emerald-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
           >
             <Edit className="w-4 h-4" />

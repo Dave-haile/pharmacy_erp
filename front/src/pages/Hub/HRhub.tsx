@@ -69,7 +69,11 @@ const CategorySection: React.FC<SectionProps> = ({
           <div
             className={`p-1.5 rounded-lg ${accentColor} text-white shadow-sm`}
           >
-            {React.cloneElement(icon as React.ReactElement, { size: 16 })}
+            {React.isValidElement(icon)
+              ? React.cloneElement(icon as React.ReactElement<{ size?: number }>, {
+                  size: 16,
+                })
+              : icon}
           </div>
           <div>
             <h2 className="text-sm font-black text-slate-800 dark:text-slate-100 tracking-tight leading-none mb-0.5">
@@ -165,8 +169,12 @@ const HRHub: React.FC = () => {
           path: "/hr/employees/new",
           highlighted: true,
         },
-        { label: "Employee Designations", path: "#" },
-        { label: "Department Structure", path: "/hr/departments", active: true },
+        { label: "Employee Designations", path: "/hr/designations", highlighted: true },
+        {
+          label: "Department Structure",
+          path: "/hr/departments",
+          active: true,
+        },
         { label: "Employee Transfers", path: "#" },
         { label: "Promotion Management", path: "#" },
         { label: "Separation / Termination", path: "#" },
@@ -186,6 +194,7 @@ const HRHub: React.FC = () => {
         },
         { label: "Leave Applications", path: "/hr/leave", highlighted: true },
         { label: "Leave Allocation", path: "/hr/leave", highlighted: true },
+        { label: "Leave Type", path: "/hr/leave-types", highlighted: true },
         { label: "Holiday List", path: "#", active: true },
         { label: "Shift Management", path: "#" },
         { label: "Overtime Requests", path: "#" },
@@ -403,4 +412,3 @@ const HRHub: React.FC = () => {
 };
 
 export default HRHub;
-

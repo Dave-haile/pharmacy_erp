@@ -22,7 +22,11 @@ const routeNameMap: Record<string, string> = {
 const Breadcrumbs: React.FC = () => {
     const location = useLocation();
     const params = useParams();
-    const pathnames = location.pathname.split('/').filter((x) => x);
+    
+    // Filter out segments we don't want in breadcrumbs (like 'edit')
+    const pathnames = location.pathname
+        .split('/')
+        .filter((x) => x && x !== 'edit');
 
     if (pathnames.length === 0 || pathnames[0] === 'login') return null;
 

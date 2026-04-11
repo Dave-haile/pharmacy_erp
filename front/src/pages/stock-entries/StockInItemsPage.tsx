@@ -5,7 +5,7 @@ import DataTable, { Column } from "../../components/DataTable";
 import { useToast } from "../../hooks/useToast";
 import { useSuppliers } from "../../services/common";
 import { fetchStockEntries } from "../../services/stockEntries";
-import { StockEntrySummary } from "../../types/types";
+import { StockEntrySummary, SupplierGroup } from "../../types/types";
 import {
   DocumentHeader,
   DocumentPage,
@@ -56,8 +56,10 @@ const StockInItemsPage: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams();
 
-    if (filters.posting_number) params.set("posting_number", filters.posting_number);
-    if (filters.invoice_number) params.set("invoice_number", filters.invoice_number);
+    if (filters.posting_number)
+      params.set("posting_number", filters.posting_number);
+    if (filters.invoice_number)
+      params.set("invoice_number", filters.invoice_number);
     if (filters.supplier) params.set("supplier", filters.supplier);
     if (filters.status) params.set("status", filters.status);
     if (currentPage > 1) params.set("page", String(currentPage));
@@ -91,7 +93,10 @@ const StockInItemsPage: React.FC = () => {
             (error.response as { data?: { error?: string; message?: string } })
               ?.data?.message
           : "Failed to post stock entry.";
-      showError(errorMessage);
+      showError(
+        errorMessage ||
+          "An unexpected error occurred while fetching stock entries.",
+      );
     }
   }, [error, showError]);
 
@@ -125,6 +130,8 @@ const StockInItemsPage: React.FC = () => {
       next.sort((a, b) => {
         const aValue = a[sortConfig.key];
         const bValue = b[sortConfig.key];
+        if (aValue == null) return 1;
+        if (bValue == null) return -1;
         if (aValue < bValue) return sortConfig.direction === "asc" ? -1 : 1;
         if (aValue > bValue) return sortConfig.direction === "asc" ? 1 : -1;
         return 0;
@@ -183,7 +190,7 @@ const StockInItemsPage: React.FC = () => {
 
   const handleSupplierChange = (value: string) => {
     const selectedSupplier = supplierGroups.find(
-      (supplier) => supplier.value === value,
+      (supplier: SupplierGroup) => supplier.value === value,
     );
     const supplierLabel = selectedSupplier?.label || "";
 

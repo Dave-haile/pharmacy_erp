@@ -407,7 +407,7 @@ const ItemMaster: React.FC = () => {
               placeholder="Select Supplier"
               className="w-full"
               triggerClassName="bg-slate-50 dark:bg-[#1a1d21] border-slate-200 dark:border-slate-800 text-slate-800 dark:text-white font-bold py-2"
-              onCreateNew={() => navigate("/inventory/suppliers/new")}
+              onCreateNew={() => navigate("/inventory/suppliers/new-supplier")}
               createNewText="Add New Medicine Supplier"
             />
           </div>

@@ -26,3 +26,6 @@ from .cost_layer import CostLayer
 from .inventory_valuation import InventoryValuation
 from .system_config import SystemConfig
 from .table_registry import TableRegistry
+from .stock_take import StockTake, StockTakeItem
+from .reorder_alert import ReorderAlert, ReorderConfig
+from .expiry_notification import ExpiryNotification, ExpiryConfig

@@ -82,7 +82,9 @@ const UserRegistry: React.FC = () => {
             ?.data?.message
         : "Failed to fetch users. Please try again.";
 
-    showError(errorMessage);
+    showError(
+      errorMessage || "An unknown error occurred while fetching users.",
+    );
   }, [error, showError]);
 
   const items = useMemo<ManagedUser[]>(
@@ -322,7 +324,7 @@ const UserRegistry: React.FC = () => {
         </div>
         {isAdmin && (
           <button
-            onClick={() => navigate("/users/new")}
+            onClick={() => navigate("/system/users/new")}
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500"
           >
             <Plus className="h-3.5 w-3.5" />

@@ -118,6 +118,7 @@ TextInput.displayName = "TextInput";
 type SelectInputProps = React.SelectHTMLAttributes<HTMLSelectElement> & {
   size?: FieldSize;
   heightClassName?: string;
+  options?: Array<{ value: string; label: string; disabled?: boolean }>;
 };
 
 export const SelectInput = forwardRef<HTMLSelectElement, SelectInputProps>(
@@ -126,6 +127,8 @@ export const SelectInput = forwardRef<HTMLSelectElement, SelectInputProps>(
       size = "md" as FieldSize,
       className = "",
       heightClassName = "",
+      options,
+      children,
       ...props
     },
     ref,
@@ -139,7 +142,18 @@ export const SelectInput = forwardRef<HTMLSelectElement, SelectInputProps>(
         className: ["appearance-none", className].filter(Boolean).join(" "),
         heightClassName,
       })}
-    />
+    >
+      {children ??
+        options?.map((option) => (
+          <option
+            key={option.value}
+            value={option.value}
+            disabled={option.disabled}
+          >
+            {option.label}
+          </option>
+        ))}
+    </select>
   ),
 );
 

@@ -287,6 +287,11 @@ export interface Supplier {
   created_at?: string;
   updated_at?: string;
 }
+export interface SupplierGroup {
+  value: string;
+  label: string;
+  subtitle?: string;
+}
 
 export interface Log {
   log_id: number;

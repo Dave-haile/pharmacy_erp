@@ -17,6 +17,12 @@ interface SearchableSelectProps {
   disabled?: boolean;
   onCreateNew?: () => void;
   createNewText?: string;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  loadMoreText?: string;
+  isLoading?: boolean;
+  loadingText?: string;
+  emptyText?: string;
 }
 
 const SearchableSelect: React.FC<SearchableSelectProps> = ({
@@ -30,16 +36,23 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   disabled = false,
   onCreateNew,
   createNewText = "Create new",
+  hasMore = false,
+  onLoadMore,
+  loadMoreText = "Load more",
+  isLoading = false,
+  loadingText = "Loading...",
+  emptyText = "No results found",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isUserTyping, setIsUserTyping] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  // Keep last non-empty options so we never flash empty list while parent refetches
   const stableOptionsRef = useRef<SelectOption[]>(options);
+
   if (options.length > 0) {
     stableOptionsRef.current = options;
   }
+
   const displayOptions =
     options.length > 0 ? options : stableOptionsRef.current;
 
@@ -60,6 +73,10 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
   }, [selectedOption, isUserTyping]);
 
   const filteredOptions = React.useMemo(() => {
+    if (onSearch) {
+      return displayOptions;
+    }
+
     const lower = inputValue.toLowerCase();
 
     return displayOptions.filter(
@@ -67,7 +84,7 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
         option.label.toLowerCase().includes(lower) ||
         (option.subtitle && option.subtitle.toLowerCase().includes(lower)),
     );
-  }, [displayOptions, inputValue]);
+  }, [displayOptions, inputValue, onSearch]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -85,10 +102,9 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
   return (
     <div
-      className={`relative ${className} ${isOpen ? "z-[90]" : "z-0"}`}
+      className={`relative ${className} ${isOpen ? "z-90" : "z-0"}`}
       ref={dropdownRef}
     >
-      {/* Main Input Field */}
       <div className="relative group">
         <input
           type="text"
@@ -119,25 +135,29 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
           className={`w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs font-medium outline-none text-slate-900 dark:text-slate-100 shadow-sm focus:border-emerald-500 transition-all placeholder:text-slate-400 disabled:cursor-not-allowed disabled:opacity-70 ${triggerClassName}`}
         />
         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-          <svg
-            className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2.5"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
+          <div className="flex items-center gap-2">
+            {isLoading ? (
+              <span className="h-3 w-3 rounded-full border border-slate-300 border-t-emerald-500 animate-spin dark:border-slate-700 dark:border-t-emerald-400" />
+            ) : null}
+            <svg
+              className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.5"
+                d="M19 9l-7 7-7-7"
+              />
+            </svg>
+          </div>
         </div>
       </div>
 
-      {/* Dropdown: stays mounted when open so list content only swaps in place (no unmount flash) */}
       {isOpen && !disabled && (
-        <div className="absolute z-[100] mt-1 max-h-60 min-w-[230px] w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 custom-scrollbar dark:border-slate-800 dark:bg-slate-900">
+        <div className="absolute z-100 mt-1 max-h-72 min-w-57.5 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-xl animate-in fade-in slide-in-from-top-2 duration-200 custom-scrollbar dark:border-slate-800 dark:bg-slate-900">
           <div className="p-1 space-y-0.5">
             {filteredOptions.length > 0 ? (
               filteredOptions.map((option) => (
@@ -171,14 +191,41 @@ const SearchableSelect: React.FC<SearchableSelectProps> = ({
                   )}
                 </div>
               ))
+            ) : isLoading ? (
+              <div className="px-3 py-4 text-center">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                  {loadingText}
+                </p>
+              </div>
             ) : (
               <div className="px-3 py-4 text-center">
                 <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                  No results found
+                  {emptyText}
                 </p>
               </div>
             )}
           </div>
+
+          {isLoading && filteredOptions.length > 0 ? (
+            <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70">
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                Updating results...
+              </p>
+            </div>
+          ) : null}
+
+          {(hasMore || isLoading) && onLoadMore ? (
+            <div className="p-1.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/50">
+              <button
+                type="button"
+                onClick={onLoadMore}
+                disabled={isLoading}
+                className="w-full py-2 px-3 rounded-lg bg-sky-600/5 hover:bg-sky-600/10 text-sky-600 dark:text-sky-400 text-[9px] font-black uppercase tracking-widest transition-all border border-sky-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLoading ? loadingText : loadMoreText}
+              </button>
+            </div>
+          ) : null}
 
           {onCreateNew && (
             <div

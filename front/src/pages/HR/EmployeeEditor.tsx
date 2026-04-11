@@ -7,6 +7,7 @@ import {
   Building,
   Calendar,
   Clipboard,
+  Link2,
   Mail,
   PencilLine,
   Phone,
@@ -27,12 +28,14 @@ import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { useToast } from "../../hooks/useToast";
 import {
   createEmployee,
+  fetchDesignations,
   fetchDepartments,
   deleteEmployee,
   fetchEmployeeByNamingSeries,
   fetchEmployeeFiltersMeta,
   updateEmployee,
 } from "../../services/hr";
+import { fetchUsers } from "../../services/users";
 import { Employee, EmployeeFormPayload } from "../../types/hr";
 
 const initialForm: EmployeeFormPayload = {
@@ -45,6 +48,7 @@ const initialForm: EmployeeFormPayload = {
   alternate_phone: "",
   department: "",
   designation: "",
+  system_user: null,
   employment_type: "full_time",
   status: "active",
   gender: "male",
@@ -71,6 +75,7 @@ const getEmployeeFormData = (employee: Employee): EmployeeFormPayload => ({
   alternate_phone: employee.alternate_phone || "",
   department: employee.department,
   designation: employee.designation,
+  system_user: employee.system_user || null,
   employment_type: employee.employment_type,
   status: employee.status,
   gender: employee.gender,
@@ -108,6 +113,8 @@ const EmployeeEditor: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [departmentSearch, setDepartmentSearch] = useState("");
+  const [designationSearch, setDesignationSearch] = useState("");
+  const [userSearch, setUserSearch] = useState("");
 
   const isReadOnly = isEdit && !isEditing;
   const locationState = location.state as EmployeeEditorLocationState | null;
@@ -134,6 +141,25 @@ const EmployeeEditor: React.FC = () => {
     queryFn: () =>
       fetchDepartments(1, 50, {
         search: departmentSearch,
+      }),
+    staleTime: 60 * 1000,
+  });
+
+  const { data: designationData } = useQuery({
+    queryKey: ["designation-options", designationSearch],
+    queryFn: () =>
+      fetchDesignations(1, 50, {
+        search: designationSearch,
+        include_inactive: "true",
+      }),
+    staleTime: 60 * 1000,
+  });
+
+  const { data: userData } = useQuery({
+    queryKey: ["employee-user-options", userSearch],
+    queryFn: () =>
+      fetchUsers(1, 50, {
+        name: userSearch,
       }),
     staleTime: 60 * 1000,
   });
@@ -207,29 +233,73 @@ const EmployeeEditor: React.FC = () => {
     return errors;
   }, [formData]);
 
-  const departmentOptions = useMemo(
-    () => {
-      const options = (departmentData?.results || []).map((department) => ({
-        value: department.name,
-        label: department.name,
-        subtitle: department.manager_name || "Department",
-      }));
+  const departmentOptions = useMemo(() => {
+    const options = (departmentData?.results || []).map((department) => ({
+      value: department.name,
+      label: department.name,
+      subtitle: department.manager_name || "Department",
+    }));
 
-      if (
-        formData.department &&
-        !options.some((option) => option.value === formData.department)
-      ) {
-        options.unshift({
-          value: formData.department,
-          label: formData.department,
-          subtitle: "Selected department",
-        });
-      }
+    if (
+      formData.department &&
+      !options.some((option) => option.value === formData.department)
+    ) {
+      options.unshift({
+        value: formData.department,
+        label: formData.department,
+        subtitle: "Selected department",
+      });
+    }
 
-      return options;
-    },
-    [departmentData?.results, formData.department],
-  );
+    return options;
+  }, [departmentData?.results, formData.department]);
+
+  const designationOptions = useMemo(() => {
+    const options = (designationData?.results || []).map((designation) => ({
+      value: designation.name,
+      label: designation.name,
+      subtitle: designation.department || "Designation",
+    }));
+
+    if (
+      formData.designation &&
+      !options.some((option) => option.value === formData.designation)
+    ) {
+      options.unshift({
+        value: formData.designation,
+        label: formData.designation,
+        subtitle: "Selected designation",
+      });
+    }
+
+    return options;
+  }, [designationData?.results, formData.designation]);
+
+  const userOptions = useMemo(() => {
+    const options = (userData?.results || []).map((user) => ({
+      value: String(user.id),
+      label: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      subtitle: `${user.email} | ${user.role}`,
+    }));
+
+    if (
+      employee?.system_user &&
+      !options.some((option) => option.value === String(employee.system_user))
+    ) {
+      options.unshift({
+        value: String(employee.system_user),
+        label: employee.user_full_name || employee.user_email || "Linked user",
+        subtitle: employee.user_email || "System user",
+      });
+    }
+
+    return options;
+  }, [
+    employee?.system_user,
+    employee?.user_email,
+    employee?.user_full_name,
+    userData?.results,
+  ]);
 
   const handleChange = (
     event: React.ChangeEvent<
@@ -566,6 +636,7 @@ const EmployeeEditor: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSaving}
+                onClick={handleSubmit}
                 className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-8 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Save className="h-3.5 w-3.5" />
@@ -832,13 +903,39 @@ const EmployeeEditor: React.FC = () => {
                 icon={<Briefcase className="h-3 w-3" />}
                 required
               >
-                <TextInput
-                  name="designation"
+                <SearchableSelect
+                  options={designationOptions}
                   value={formData.designation}
-                  onChange={handleChange}
-                  list="designation-options"
-                  placeholder="HR Officer"
+                  onChange={(value) =>
+                    setFormData((prev) => ({ ...prev, designation: value }))
+                  }
+                  onSearch={setDesignationSearch}
+                  placeholder="Select Designation"
                   disabled={isReadOnly}
+                  onCreateNew={() => navigate("/hr/designations/new")}
+                  createNewText="Add Designation"
+                  triggerClassName="rounded-xl border-slate-200 bg-slate-50 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-800 dark:text-white"
+                />
+              </FormField>
+              <FormField
+                label="Linked System User"
+                icon={<Link2 className="h-3 w-3" />}
+              >
+                <SearchableSelect
+                  options={userOptions}
+                  value={
+                    formData.system_user ? String(formData.system_user) : ""
+                  }
+                  onChange={(value) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      system_user: value ? Number(value) : null,
+                    }))
+                  }
+                  onSearch={setUserSearch}
+                  placeholder="Optional user account"
+                  disabled={isReadOnly}
+                  triggerClassName="rounded-xl border-slate-200 bg-slate-50 py-3 text-sm font-bold dark:border-slate-800 dark:bg-slate-800 dark:text-white"
                 />
               </FormField>
               <FormField
@@ -1029,12 +1126,6 @@ const EmployeeEditor: React.FC = () => {
             </button>
           </div>
         ) : null}
-
-        <datalist id="designation-options">
-          {meta?.designations.map((designation) => (
-            <option key={designation} value={designation} />
-          ))}
-        </datalist>
       </form>
     </div>
   );

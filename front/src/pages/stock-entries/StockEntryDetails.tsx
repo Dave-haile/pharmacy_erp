@@ -12,6 +12,7 @@ import {
   fetchMedicineByNumericId,
   fetchMedicines,
 } from "../../services/medicines";
+import { fetchSupplierById } from "../../services/suppler";
 import {
   cancelStockEntry,
   createStockEntry,
@@ -40,7 +41,6 @@ import {
   documentPrimaryButtonClassName,
   documentSecondaryButtonClassName,
   documentSelectTriggerClassName,
-  documentTextareaClassName,
 } from "../../components/common/DocumentUI";
 import DocumentActivityLog from "../../components/common/DocumentActivityLog";
 import StockEntryActionsMenu from "./StockEntryActionsMenu";
@@ -226,17 +226,6 @@ const StockEntryPage: React.FC = () => {
     staleTime: 60 * 1000,
   });
 
-  const medicineOptionsByRow = useMemo(() => {
-    return formData.items.map((_, index) => {
-      const result = medicineQuery.data?.[index]?.results || [];
-      return result.map((medicine) => ({
-        value: String(medicine.id),
-        label: medicine.name,
-        subtitle: `${medicine.naming_series} · ${medicine.generic_name || "No generic name"}`,
-      }));
-    });
-  }, [formData.items, medicineQuery.data]);
-
   const medicineDetailQueries = useQueries({
     queries: formData.items.map((item) => ({
       queryKey: ["medicine-detail", item.medicine_id],
@@ -245,6 +234,66 @@ const StockEntryPage: React.FC = () => {
       staleTime: 60 * 1000,
     })),
   });
+
+  const medicineOptionsByRow = useMemo(() => {
+    return formData.items.map((item, index) => {
+      const result = medicineQuery.data?.[index]?.results || [];
+      const options = result.map((medicine) => ({
+        value: String(medicine.id),
+        label: medicine.name,
+        subtitle: `${medicine.naming_series} · ${medicine.generic_name || "No generic name"}`,
+      }));
+      const selectedMedicine = medicineDetailQueries[index]?.data as
+        | MedicineItem
+        | undefined;
+      const selectedId =
+        item.medicine_id != null ? String(item.medicine_id) : null;
+
+      if (
+        selectedId &&
+        selectedMedicine &&
+        !options.some((option) => option.value === selectedId)
+      ) {
+        options.unshift({
+          value: selectedId,
+          label: selectedMedicine.name,
+          subtitle: `${selectedMedicine.naming_series || "-"} · ${
+            selectedMedicine.generic_name || "No generic name"
+          }`,
+        });
+      }
+
+      return options;
+    });
+  }, [formData.items, medicineDetailQueries, medicineQuery.data]);
+
+  const selectedSupplierQuery = useQuery({
+    queryKey: ["stock-entry-supplier-detail", formData.supplier_id],
+    queryFn: () => fetchSupplierById(formData.supplier_id!),
+    enabled: formData.supplier_id != null,
+    staleTime: 60 * 1000,
+  });
+
+  const supplierOptions = useMemo(() => {
+    const options = [...supplierGroups];
+    const selectedSupplier = selectedSupplierQuery.data;
+    const selectedId =
+      formData.supplier_id != null ? String(formData.supplier_id) : null;
+
+    if (
+      selectedId &&
+      selectedSupplier &&
+      !options.some((option) => option.value === selectedId)
+    ) {
+      options.unshift({
+        value: selectedId,
+        label: selectedSupplier.name,
+        subtitle: `${selectedSupplier.phone} - ${selectedSupplier.email} - ${selectedSupplier.address}`,
+      });
+    }
+
+    return options;
+  }, [formData.supplier_id, selectedSupplierQuery.data, supplierGroups]);
 
   const totals = useMemo(() => {
     const subtotal = formData.items.reduce((sum, item) => {
@@ -816,11 +865,12 @@ const StockEntryPage: React.FC = () => {
           title="Receipt Details"
           description="Capture the supplier reference and posting context before entering receipt lines."
           accent="blue"
+          contentClassName="p-0 md:p-0"
         >
-          <div className="grid gap-5 md:grid-cols-3">
+          <div className="grid gap-5 md:grid-cols-4">
             <DocumentField label="Supplier">
               <SearchableSelect
-                options={supplierGroups}
+                options={supplierOptions}
                 value={
                   formData.supplier_id != null
                     ? String(formData.supplier_id)
@@ -849,7 +899,7 @@ const StockEntryPage: React.FC = () => {
                     invoice_number: e.target.value,
                   }))
                 }
-                className={documentInputClassName}
+                className={`${documentInputClassName} w-full`}
                 placeholder="Supplier invoice / GRN reference"
                 disabled={!canEditForm}
               />
@@ -863,28 +913,25 @@ const StockEntryPage: React.FC = () => {
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, tax: e.target.value }))
                 }
-                className={`${documentInputClassName} appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
+                className={`${documentInputClassName} w-full appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
                 placeholder="0.00"
                 disabled={!canEditForm}
               />
             </DocumentField>
-            <div className="md:col-span-3">
-              <DocumentField
-                label="Notes"
-                hint="Optional internal receiving notes"
-              >
-                <textarea
-                  rows={4}
-                  value={formData.notes}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, notes: e.target.value }))
-                  }
-                  className={documentTextareaClassName}
-                  placeholder="Document any special handling, discrepancies, or receiving notes"
-                  disabled={!canEditForm}
-                />
-              </DocumentField>
-            </div>
+            <DocumentField
+              label="Notes"
+              // hint="Optional internal receiving notes"
+            >
+              <input
+                value={formData.notes}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                }
+                className={`${documentInputClassName} w-full`}
+                placeholder="Document any special handling, discrepancies, or receiving notes"
+                disabled={!canEditForm}
+              />
+            </DocumentField>
           </div>
         </DocumentCard>
 

@@ -234,7 +234,7 @@ def consume_stock(medicine, quantity_needed: int) -> Tuple[Decimal, List[Dict], 
 
     if method == 'average':
         # For average cost, just update the valuation
-        cogs, layers_used, method = calculate_cogs_average(medicine, quantity_needed)
+        cogs, layers_used = calculate_cogs_average(medicine, quantity_needed)
 
         try:
             valuation = medicine.valuation

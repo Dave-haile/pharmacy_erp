@@ -410,8 +410,8 @@ const SystemHub: React.FC = () => {
       accentColor: "bg-rose-500",
       icon: <Users />,
       links: [
-        { label: "User Management", path: "/users", highlighted: true },
-        { label: "Create User", path: "/users/new", highlighted: true },
+        { label: "User Management", path: "/system/users", highlighted: true },
+        { label: "Create User", path: "/system/users/new", highlighted: true },
         { label: "Role Permissions", path: "#" },
         { label: "API Keys", path: "#" },
         { label: "Security Settings", path: "#" },
