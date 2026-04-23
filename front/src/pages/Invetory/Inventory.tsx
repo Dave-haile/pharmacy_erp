@@ -39,6 +39,8 @@ const InventoryRegistryPage: React.FC = () => {
     status: "",
   });
   const [debouncedFilters, setDebouncedFilters] = useState(filters);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [sortConfig, setSortConfig] = useState<{
     key: keyof InventoryBatchItem;
     direction: "asc" | "desc";
@@ -50,6 +52,10 @@ const InventoryRegistryPage: React.FC = () => {
     const timer = setTimeout(() => setDebouncedFilters(filters), 250);
     return () => clearTimeout(timer);
   }, [filters]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedFilters, sortConfig, pageSize]);
 
   const loadInventory = async () => {
     setIsLoading(true);
@@ -97,6 +103,10 @@ const InventoryRegistryPage: React.FC = () => {
   }, [items, sortConfig]);
 
   const summary = inventory?.summary;
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return sortedItems.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, pageSize, sortedItems]);
   const visibleValue = sortedItems.reduce(
     (sum, item) => sum + Number(item.unit_cost || 0) * item.quantity,
     0,
@@ -324,7 +334,7 @@ const InventoryRegistryPage: React.FC = () => {
 
       <DataTable
         columns={columns}
-        data={sortedItems}
+        data={paginatedItems}
         isLoading={isLoading}
         onRefresh={loadInventory}
         filters={filtersContent}
@@ -335,6 +345,14 @@ const InventoryRegistryPage: React.FC = () => {
         loadingMessage="Loading inventory registry..."
         refreshMessage="Refreshing inventory registry..."
         refreshLabel="Refresh"
+        pagination={{
+          currentPage,
+          pageSize,
+          total: sortedItems.length,
+          onPageChange: setCurrentPage,
+          onPageSizeChange: setPageSize,
+          pageSizeOptions: [10, 25, 50],
+        }}
         headerRight={
           <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-600">
             <span>

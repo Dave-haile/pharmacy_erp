@@ -12,7 +12,7 @@ from xml.sax.saxutils import escape as xml_escape
 from django.core.cache import cache
 from django.core.paginator import EmptyPage, Paginator
 from django.db import transaction
-from django.db.models import Count, DecimalField, IntegerField, Q, Sum, Value
+from django.db.models import Count, DecimalField, F, IntegerField, Q, Sum, Value
 from django.db.models.deletion import ProtectedError
 from django.db.models.functions import Coalesce
 from django.http import HttpResponse, JsonResponse
@@ -3029,11 +3029,13 @@ def medicines_import_preview(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def medicines_import(request):
+    print(f"User {request.user.username} initiated medicine import.")
     denied = _require_roles(request, {"admin", "manager"})
     if denied:
         return denied
 
     uploaded_file = request.FILES.get("file")
+    print(uploaded_file)
     if not uploaded_file:
         return JsonResponse({"error": "Import file is required."}, status=400)
 
@@ -3056,8 +3058,9 @@ def medicines_import(request):
 
     if created:
         cache.clear()
-
-    UserLog.objects.create(
+        
+    print(f"Created {created} medicines, {len(failures)} failures.")
+    importlog = UserLog.objects.create(
         user=request.user,
         action="Medicine Import",
         details=json.dumps(
@@ -3069,6 +3072,7 @@ def medicines_import(request):
             default=str,
         ),
     )
+    print(f"Import log created with ID: {importlog}")
 
     return JsonResponse(
         {
@@ -7267,20 +7271,76 @@ def stock_take_create(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def stock_take_detail(request, stock_take_id):
-    """Get stock take details with items."""
+    """Get stock take details with paginated items."""
     try:
-        stock_take = StockTake.objects.prefetch_related("items__medicine", "items__batch").get(
-            id=stock_take_id
-        )
+        stock_take = StockTake.objects.get(id=stock_take_id)
     except StockTake.DoesNotExist:
         return JsonResponse({"error": "Stock take not found."}, status=404)
+
+    try:
+        page = int(request.GET.get("page", 1))
+    except (TypeError, ValueError):
+        page = 1
+
+    try:
+        page_size = int(request.GET.get("page_size", 20))
+    except (TypeError, ValueError):
+        page_size = 20
+
+    page = max(page, 1)
+    page_size = max(1, min(page_size, 100))
+
+    item_query = (request.GET.get("item") or "").strip()
+    generic_name_query = (request.GET.get("generic_name") or "").strip()
+    status_filter = (request.GET.get("status") or "").strip().lower()
+
+    items_queryset = stock_take.items.select_related(
+        "medicine", "batch", "counted_by"
+    ).order_by("medicine__name", "id")
+
+    if item_query:
+        items_queryset = items_queryset.filter(
+            Q(medicine__name__icontains=item_query)
+            | Q(medicine__barcode__icontains=item_query)
+            | Q(batch__batch_number__icontains=item_query)
+        )
+
+    if generic_name_query:
+        items_queryset = items_queryset.filter(
+            medicine__generic_name__icontains=generic_name_query
+        )
+
+    if status_filter in {"matched", "surplus", "shortage"}:
+        if status_filter == "matched":
+            items_queryset = items_queryset.filter(
+                counted_quantity=F("system_quantity")
+            )
+        elif status_filter == "surplus":
+            items_queryset = items_queryset.filter(
+                counted_quantity__gt=F("system_quantity")
+            )
+        else:
+            items_queryset = items_queryset.filter(
+                counted_quantity__lt=F("system_quantity")
+            )
+
+    paginator = Paginator(items_queryset, page_size)
+
+    try:
+        items_page = paginator.page(page)
+    except EmptyPage:
+        items_page = paginator.page(paginator.num_pages or 1)
 
     items = [
         {
             "id": item.id,
+            "stock_take": stock_take.id,
+            "medicine": item.medicine_id,
             "medicine_id": item.medicine_id,
             "medicine_name": item.medicine.name,
+            "medicine_generic_name": item.medicine.generic_name,
             "medicine_barcode": item.medicine.barcode,
+            "batch": item.batch_id,
             "batch_id": item.batch_id,
             "batch_number": item.batch.batch_number if item.batch else None,
             "system_quantity": str(item.system_quantity),
@@ -7289,12 +7349,14 @@ def stock_take_detail(request, stock_take_id):
             "variance_percentage": round(item.variance_percentage, 2),
             "variance_status": item.variance_status,
             "unit_cost": str(item.unit_cost) if item.unit_cost else None,
+            "unit_cost_display": str(item.unit_cost) if item.unit_cost else None,
             "notes": item.notes,
             "counted_by": item.counted_by_id,
             "counted_by_name": getattr(item.counted_by, "username", None) if item.counted_by else None,
             "counted_at": item.counted_at.isoformat() if item.counted_at else None,
+            "created_at": item.created_at.isoformat(),
         }
-        for item in stock_take.items.all()
+        for item in items_page.object_list
     ]
 
     return JsonResponse(
@@ -7312,6 +7374,13 @@ def stock_take_detail(request, stock_take_id):
             "totals": stock_take.calculate_totals(),
             "items": items,
             "created_at": stock_take.created_at.isoformat(),
+            "updated_at": stock_take.updated_at.isoformat(),
+            "count": paginator.count,
+            "current_page": items_page.number,
+            "page_size": page_size,
+            "total_pages": paginator.num_pages,
+            "has_next": items_page.has_next(),
+            "has_previous": items_page.has_previous(),
         }
     )
 

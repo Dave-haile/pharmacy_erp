@@ -5,6 +5,7 @@ export interface StockTakeItem {
   stock_take: number;
   medicine: number;
   medicine_name: string;
+  medicine_generic_name?: string;
   medicine_barcode: string;
   batch: number | null;
   batch_number: string | null;
@@ -51,7 +52,16 @@ export interface StockTakeListResponse {
   results: StockTake[];
 }
 
-export interface StockTakeDetailResponse extends StockTake {
+export interface StockTakeItemsPage {
+  count: number;
+  current_page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface StockTakeDetailResponse extends StockTake, StockTakeItemsPage {
   items: StockTakeItem[];
 }
 
@@ -65,8 +75,28 @@ export const fetchStockTakes = async (filters?: {
   return res.data as StockTakeListResponse;
 };
 
-export const fetchStockTake = async (id: number) => {
-  const res = await api.get(`/api/inventory/stock-takes/${id}/`);
+export const fetchStockTake = async (
+  id: number,
+  params?: {
+    page?: number;
+    page_size?: number;
+    item?: string;
+    generic_name?: string;
+    status?: string;
+  }
+) => {
+  const searchParams = new URLSearchParams();
+  if (params?.page) searchParams.append("page", String(params.page));
+  if (params?.page_size) {
+    searchParams.append("page_size", String(params.page_size));
+  }
+  if (params?.item) searchParams.append("item", params.item);
+  if (params?.generic_name) {
+    searchParams.append("generic_name", params.generic_name);
+  }
+  if (params?.status) searchParams.append("status", params.status);
+  const suffix = searchParams.toString() ? `?${searchParams.toString()}` : "";
+  const res = await api.get(`/api/inventory/stock-takes/${id}/${suffix}`);
   return res.data as StockTakeDetailResponse;
 };
 

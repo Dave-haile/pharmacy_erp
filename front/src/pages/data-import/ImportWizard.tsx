@@ -11,8 +11,20 @@ import {
   X,
   Eye,
   Table,
+  Settings,
+  Columns,
+  Info,
+  ChevronRight,
 } from "lucide-react";
 import api from "../../services/api";
+
+interface ReferenceInfo {
+  is_reference: boolean;
+  reference_model?: string;
+  reference_table?: string;
+  reference_label_field?: string;
+  reference_id_field?: string;
+}
 
 interface TableField {
   name: string;
@@ -24,6 +36,8 @@ interface TableField {
   choices?: string[];
   max_length?: number;
   is_identifier?: boolean;
+  is_reference?: boolean;
+  reference_info?: ReferenceInfo | null;
 }
 
 interface TableSchema {
@@ -63,7 +77,15 @@ const ImportWizard: React.FC = () => {
     created?: number;
     updated?: number;
     errors?: number;
+    error_details?: { row: number; errors: string[] }[];
   } | null>(null);
+
+  // Modal states
+  const [showFieldRequirementsModal, setShowFieldRequirementsModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set());
+  const [includeSampleData, setIncludeSampleData] = useState(true);
+  const [sampleDataCount, setSampleDataCount] = useState(5);
 
   useEffect(() => {
     if (!tableCode) {
@@ -131,6 +153,7 @@ const ImportWizard: React.FC = () => {
     if (!file || !preview) return;
 
     setIsImporting(true);
+    setUploadError("");
 
     const formData = new FormData();
     formData.append("file", file);
@@ -146,21 +169,105 @@ const ImportWizard: React.FC = () => {
       );
       setImportSuccess(true);
       setImportResult(response.data);
-    } catch (err) {
+
+      // Show error details if there were import errors
+      if (response.data.error_details && response.data.error_details.length > 0) {
+        const errorCount = response.data.error_details.length;
+        setUploadError(
+          `Import completed with ${errorCount} error(s). Check the error details below.`
+        );
+      }
+    } catch (err: unknown) {
       console.error(err);
-      setUploadError("Import failed. Please try again.");
+      let errorMsg = "Import failed. Please try again.";
+
+      // Try to extract detailed error from response
+      const axiosError = err as {
+        response?: {
+          data?: { error?: string; detail?: string; errors?: string[] };
+          status?: number;
+        };
+        message?: string;
+      };
+
+      if (axiosError.response?.data?.error) {
+        errorMsg = axiosError.response.data.error;
+      } else if (axiosError.response?.data?.detail) {
+        errorMsg = axiosError.response.data.detail;
+      } else if (axiosError.response?.data?.errors) {
+        errorMsg = axiosError.response.data.errors.join("; ");
+      } else if (axiosError.message) {
+        errorMsg = axiosError.message;
+      }
+
+      setUploadError(errorMsg);
+      setImportSuccess(false);
     } finally {
       setIsImporting(false);
     }
   };
 
+  // Initialize selected columns when schema loads
+  useEffect(() => {
+    if (schema?.fields) {
+      setSelectedColumns(new Set(schema.fields.map((f) => f.name)));
+    }
+  }, [schema]);
+
+  const handleColumnToggle = (columnName: string) => {
+    const newSelected = new Set(selectedColumns);
+    if (newSelected.has(columnName)) {
+      newSelected.delete(columnName);
+    } else {
+      newSelected.add(columnName);
+    }
+    setSelectedColumns(newSelected);
+  };
+
+  const handleSelectAllColumns = () => {
+    if (schema?.fields) {
+      setSelectedColumns(new Set(schema.fields.map((f) => f.name)));
+    }
+  };
+
+  const handleDeselectAllColumns = () => {
+    setSelectedColumns(new Set());
+  };
+
   const downloadTemplate = () => {
-    if (!schema) return;
+    if (!schema || selectedColumns.size === 0) return;
 
-    const headers = schema.fields.map((f) => f.name).join(",");
-    const exampleRow = schema.fields.map((f) => f.example || "").join(",");
+    const selectedFields = schema.fields.filter((f) => selectedColumns.has(f.name));
+    const headers = selectedFields.map((f) => f.name).join(",");
 
-    const csvContent = [headers, exampleRow].join("\n");
+    let csvContent = headers + "\n";
+
+    // Add sample data rows if requested
+    if (includeSampleData && sampleDataCount > 0) {
+      for (let i = 0; i < sampleDataCount; i++) {
+        const row = selectedFields.map((f) => {
+          // Generate contextual sample data based on field type
+          if (f.is_reference) {
+            return `Sample ${f.label}`;
+          }
+          if (f.example) {
+            return f.example;
+          }
+          if (f.type === "boolean") {
+            return i % 2 === 0 ? "true" : "false";
+          }
+          if (f.type === "integer" || f.type === "decimal") {
+            return String(i + 1);
+          }
+          if (f.choices && f.choices.length > 0) {
+            return f.choices[i % f.choices.length];
+          }
+          return `Sample ${f.label} ${i + 1}`;
+        });
+        csvContent += row.join(",") + "\n";
+      }
+    }
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
 
@@ -171,6 +278,7 @@ const ImportWizard: React.FC = () => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+    setShowExportModal(false);
   };
 
   const getTypeIcon = (type: string) => {
@@ -305,94 +413,43 @@ const ImportWizard: React.FC = () => {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-6">
-        {/* Field Requirements Section */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-6">
-          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Table className="w-5 h-5 text-emerald-500" />
-              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                Field Requirements
-              </h2>
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+          <button
+            onClick={() => setShowFieldRequirementsModal(true)}
+            className="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-lg transition-all group"
+          >
+            <div className="w-12 h-12 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/30 transition-colors">
+              <Table className="w-6 h-6 text-emerald-500" />
             </div>
-            <button
-              onClick={downloadTemplate}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 rounded-lg transition-colors"
-            >
-              <Download className="w-4 h-4" />
-              Download Template
-            </button>
-          </div>
+            <div className="text-left flex-1">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Field Requirements
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                View required fields and data types
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-400 transition-colors" />
+          </button>
 
-          <div className="divide-y divide-slate-100 dark:divide-slate-700">
-            {schema?.fields.map((field) => (
-              <div
-                key={field.name}
-                className="px-6 py-4 flex items-start gap-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
-              >
-                <div className="w-10 h-10 bg-slate-100 dark:bg-slate-700 rounded-lg flex items-center justify-center text-xs font-bold text-slate-500 shrink-0">
-                  {getTypeIcon(field.type)}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-slate-800 dark:text-slate-100 font-mono">
-                      {field.name}
-                    </span>
-                    {field.required && (
-                      <span className="px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-[10px] font-bold uppercase rounded">
-                        Required
-                      </span>
-                    )}
-                    {field.is_identifier && (
-                      <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase rounded">
-                        Identifier
-                      </span>
-                    )}
-                    <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase rounded">
-                      {field.type}
-                    </span>
-                    {field.max_length && (
-                      <span className="text-xs text-slate-400">
-                        Max {field.max_length} chars
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">
-                    {field.label}
-                  </p>
-
-                  {field.description && (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                      {field.description}
-                    </p>
-                  )}
-
-                  {field.example && (
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-                      Example:{" "}
-                      <span className="font-mono text-slate-500">
-                        {field.example}
-                      </span>
-                    </p>
-                  )}
-
-                  {field.choices && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {field.choices.map((choice) => (
-                        <span
-                          key={choice}
-                          className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs rounded"
-                        >
-                          {choice}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center gap-4 p-4 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-lg transition-all group"
+          >
+            <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900/30 transition-colors">
+              <Download className="w-6 h-6 text-blue-500" />
+            </div>
+            <div className="text-left flex-1">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Download Template
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Customize and export import template
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-blue-400 transition-colors" />
+          </button>
         </div>
 
         {/* File Upload Section */}
@@ -448,11 +505,35 @@ const ImportWizard: React.FC = () => {
               </div>
 
               {uploadError && (
-                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-700 dark:text-red-400">
-                    {uploadError}
-                  </p>
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm text-red-700 dark:text-red-400 font-medium">
+                        {uploadError}
+                      </p>
+
+                      {/* Show import error details if available */}
+                      {importResult?.error_details && importResult.error_details.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-semibold text-red-600 dark:text-red-400">
+                            Error Details:
+                          </p>
+                          <div className="max-h-40 overflow-y-auto space-y-1 bg-white dark:bg-slate-800 rounded-lg p-2 border border-red-100 dark:border-red-800">
+                            {importResult.error_details.map((error, idx) => (
+                              <div
+                                key={idx}
+                                className="text-xs text-red-600 dark:text-red-400 py-1 px-2 hover:bg-red-50 dark:hover:bg-red-900/10 rounded"
+                              >
+                                <span className="font-mono font-medium">Row {error.row}:</span>{" "}
+                                {error.errors.join(", ")}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -542,6 +623,357 @@ const ImportWizard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Field Requirements Modal */}
+      {showFieldRequirementsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl flex items-center justify-center">
+                  <Table className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                    Field Requirements
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {schema?.fields.length || 0} fields available for import
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFieldRequirementsModal(false)}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="space-y-3">
+                {schema?.fields.map((field) => (
+                  <div
+                    key={field.name}
+                    className={`p-4 rounded-xl border transition-all ${
+                      field.required
+                        ? "bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800"
+                        : "bg-slate-50 dark:bg-slate-700/30 border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${
+                        field.required
+                          ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                          : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                      }`}>
+                        {getTypeIcon(field.type)}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-2">
+                          <span className={`text-sm font-bold font-mono ${
+                            field.required
+                              ? "text-red-700 dark:text-red-300"
+                              : "text-slate-800 dark:text-slate-100"
+                          }`}>
+                            {field.name}
+                          </span>
+                          {field.required && (
+                            <span className="px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold uppercase rounded-full">
+                              Required
+                            </span>
+                          )}
+                          {field.is_identifier && (
+                            <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-[10px] font-bold uppercase rounded-full">
+                              Identifier
+                            </span>
+                          )}
+                          {field.is_reference && (
+                            <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase rounded-full">
+                              Reference
+                            </span>
+                          )}
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase rounded-full">
+                            {field.type}
+                          </span>
+                        </div>
+
+                        <p className="text-sm text-slate-700 dark:text-slate-300 mb-1">
+                          {field.label}
+                        </p>
+
+                        {field.description && (
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                            {field.description}
+                          </p>
+                        )}
+
+                        <div className="flex flex-wrap gap-4 text-xs">
+                          {field.example && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400">Example:</span>
+                              <code className="px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded text-slate-600 dark:text-slate-300 font-mono">
+                                {field.example}
+                              </code>
+                            </div>
+                          )}
+                          {field.max_length && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-400">Max:</span>
+                              <span className="text-slate-600 dark:text-slate-300">{field.max_length} chars</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {field.choices && field.choices.length > 0 && (
+                          <div className="mt-3">
+                            <p className="text-xs text-slate-400 mb-1.5">Allowed values:</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {field.choices.map((choice) => (
+                                <span
+                                  key={choice}
+                                  className="px-2 py-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs rounded-lg"
+                                >
+                                  {choice}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {field.is_reference && field.reference_info && (
+                          <div className="mt-3 p-3 bg-purple-50 dark:bg-purple-900/10 rounded-lg border border-purple-100 dark:border-purple-800/30">
+                            <p className="text-xs text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                              <Info className="w-4 h-4" />
+                              You can reference this field by name (e.g., "Dermatology") or ID
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 shrink-0">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span className="text-slate-600 dark:text-slate-400">Required</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600"></div>
+                    <span className="text-slate-600 dark:text-slate-400">Optional</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowFieldRequirementsModal(false)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-medium hover:bg-slate-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Export Template Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
+                  <Download className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                    Download Template
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Customize your import template
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Data Options */}
+              <div className="mb-6 p-4 bg-slate-50 dark:bg-slate-700/30 rounded-xl">
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-3 flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Template Options
+                </h3>
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeSampleData}
+                      onChange={(e) => setIncludeSampleData(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-blue-500 focus:ring-blue-500"
+                    />
+                    <div>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">
+                        Include sample data
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Add example rows to help understand the format
+                      </p>
+                    </div>
+                  </label>
+
+                  {includeSampleData && (
+                    <div className="ml-7">
+                      <label className="text-xs text-slate-600 dark:text-slate-400 mb-1.5 block">
+                        Number of sample rows: {sampleDataCount}
+                      </label>
+                      <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        value={sampleDataCount}
+                        onChange={(e) => setSampleDataCount(parseInt(e.target.value))}
+                        className="w-full h-2 bg-slate-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                      <div className="flex justify-between text-xs text-slate-400 mt-1">
+                        <span>1</span>
+                        <span>20</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                    <Columns className="w-4 h-4" />
+                    Select Columns ({selectedColumns.size}/{schema?.fields.length || 0})
+                  </h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSelectAllColumns}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      onClick={handleDeselectAllColumns}
+                      className="text-xs text-slate-500 hover:text-slate-600 font-medium"
+                    >
+                      None
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden max-h-80 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-700 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-400 w-10">
+                          <input
+                            type="checkbox"
+                            checked={selectedColumns.size === (schema?.fields.length || 0)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                handleSelectAllColumns();
+                              } else {
+                                handleDeselectAllColumns();
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-500"
+                          />
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          Column Name
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          Type
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
+                      {schema?.fields.map((field) => (
+                        <tr
+                          key={field.name}
+                          className={`${
+                            field.required ? "bg-red-50/30 dark:bg-red-900/5" : ""
+                          } hover:bg-slate-50 dark:hover:bg-slate-700/30`}
+                        >
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={selectedColumns.has(field.name)}
+                              onChange={() => handleColumnToggle(field.name)}
+                              className="w-4 h-4 rounded border-slate-300 text-blue-500"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div>
+                              <p className="font-medium text-slate-800 dark:text-slate-100 font-mono">
+                                {field.name}
+                              </p>
+                              <p className="text-xs text-slate-500">{field.label}</p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs rounded">
+                              {field.type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            {field.required ? (
+                              <span className="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold rounded">
+                                Required
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-xs rounded">
+                                Optional
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 shrink-0 flex justify-end gap-3">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2 text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={downloadTemplate}
+                disabled={selectedColumns.size === 0}
+                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-300 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Download className="w-4 h-4" />
+                Download Template
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

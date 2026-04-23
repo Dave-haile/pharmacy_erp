@@ -56,7 +56,7 @@ export const DocumentActivityLog: React.FC<DocumentActivityLogProps> = ({
         </button>
       ) : undefined
     }
-    contentClassName="space-y-5"
+    contentClassName="space-y-3"
   >
     {isLoading ? (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-12 text-center dark:border-slate-800 dark:bg-slate-800/30">
@@ -70,38 +70,39 @@ export const DocumentActivityLog: React.FC<DocumentActivityLogProps> = ({
         const tone = logTone(log.action);
 
         return (
-          <div key={log.log_id} className="relative pl-8">
+          <div key={log.log_id} className="relative pl-7">
             {index < logs.length - 1 && (
-              <div className="absolute bottom-0 left-[11px] top-7 w-px bg-slate-200 dark:bg-slate-800" />
+              <div className="absolute bottom-0 left-[9px] top-6 w-px bg-slate-200 dark:bg-slate-800" />
             )}
             <div
-              className={`absolute left-0 top-1.5 flex h-6 w-6 items-center justify-center rounded-full border-4 border-white shadow-sm dark:border-slate-900 ${tone.dot}`}
+              className={`absolute left-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-white shadow-sm dark:border-slate-900 ${tone.dot}`}
             >
               {tone.icon}
             </div>
-            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4 dark:border-slate-800 dark:bg-slate-800/30">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+            <div className="max-w-3xl rounded-xl border border-slate-200/80 bg-slate-50/60 p-3 dark:border-slate-800 dark:bg-slate-800/20">
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <Activity className="h-3.5 w-3.5 text-slate-400" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-800 dark:text-slate-100">
+                  <Activity className="h-3 w-3 text-slate-400" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100">
                     {log.action}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
-                  <Clock className="h-3.5 w-3.5" />
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+                  <Clock className="h-3 w-3" />
                   <span>{formatRelativeLogTime(log.timestamp)}</span>
                 </div>
               </div>
-              <div className="space-y-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+              <div className="space-y-1 text-[13px] leading-5 text-slate-600 dark:text-slate-300">
                 {formatLogLines(log).map((line, lineIndex) => (
                   <p key={`${log.log_id}-${lineIndex}`}>{line}</p>
                 ))}
               </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-slate-700">
-                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-500 dark:text-slate-400">
+              <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-slate-200/80 pt-2 dark:border-slate-700">
+                <p className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
                   {log.username || `User #${log.user_id}`}
                 </p>
-                <p className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                <span className="text-[10px] text-slate-300 dark:text-slate-600">•</span>
+                <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
                   {when ? when.toLocaleString() : log.timestamp}
                 </p>
               </div>

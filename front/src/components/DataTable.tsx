@@ -30,6 +30,14 @@ interface DataTableProps<T> {
   headerRight?: React.ReactNode;
   refreshMessage?: string;
   refreshLabel?: string;
+  pagination?: {
+    currentPage: number;
+    pageSize: number;
+    total: number;
+    onPageChange: (page: number) => void;
+    onPageSizeChange: (size: number) => void;
+    pageSizeOptions?: number[];
+  };
 }
 
 const DataTable = <T extends object>({
@@ -54,11 +62,15 @@ const DataTable = <T extends object>({
   headerRight,
   refreshMessage = "Refreshing",
   refreshLabel = "Refresh",
+  pagination,
 }: DataTableProps<T>) => {
   const allSelected = data.length > 0 && selectedIds.size === data.length;
   const showInitialLoadingState = isLoading && data.length === 0;
   const showRefreshState = isRefreshing && data.length > 0;
   const isRefreshDisabled = isLoading || isRefreshing;
+  const canLoadMore = pagination
+    ? pagination.currentPage * pagination.pageSize < pagination.total
+    : false;
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm dark:shadow-2xl flex flex-col transition-colors">
@@ -105,7 +117,7 @@ const DataTable = <T extends object>({
             )}
           </div>
         )}
-        <div className="overflow-x-auto custom-scrollbar">
+        <div className="max-h-[70vh] overflow-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               {headerRight && (
@@ -228,6 +240,35 @@ const DataTable = <T extends object>({
       {footer && (
         <div className="p-4 md:p-6 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
           {footer}
+        </div>
+      )}
+      {pagination && (
+        <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900 md:flex-row md:items-center md:justify-between md:p-6">
+          <div className="flex items-center rounded-xl border border-slate-200 bg-white p-1 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            {[20, 100, 500].map((size) => (
+              <button
+                key={size}
+                type="button"
+                onClick={() => pagination.onPageSizeChange(size)}
+                className={`rounded-lg px-3 py-1.5 text-[10px] font-black transition-all ${
+                  pagination.pageSize === size
+                    ? "bg-slate-900 text-white shadow-sm dark:bg-slate-700"
+                    : "text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                }`}
+              >
+                {size}
+              </button>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => pagination.onPageChange(pagination.currentPage + 1)}
+            disabled={!canLoadMore}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-slate-700 dark:hover:bg-slate-800 dark:hover:text-white"
+          >
+            Load More
+          </button>
         </div>
       )}
     </div>

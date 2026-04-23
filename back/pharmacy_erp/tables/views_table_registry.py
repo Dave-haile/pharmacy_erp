@@ -71,10 +71,33 @@ def _can_import_to_field(field):
     return True
 
 
+def _get_reference_field_info(field):
+    """Get information about a foreign key reference field."""
+    try:
+        related_model = field.remote_field.model
+        return {
+            'is_reference': True,
+            'reference_model': f"{related_model._meta.app_label}.{related_model._meta.model_name}",
+            'reference_table': related_model._meta.db_table,
+            'reference_label_field': 'name',  # Default lookup field
+            'reference_id_field': 'id',  # Primary key field
+        }
+    except:
+        return {
+            'is_reference': True,
+            'reference_model': None,
+            'reference_table': None,
+            'reference_label_field': 'name',
+            'reference_id_field': 'id',
+        }
+
+
 def _build_column_from_model_field(field):
     raw_choices = getattr(field, 'choices', None) or []
     choices = [choice_value for choice_value, _ in raw_choices] or None
-    return {
+
+    # Build base column info
+    column = {
         'name': field.name,
         'label': getattr(field, 'verbose_name', field.name).replace('_', ' ').title(),
         'type': _field_type_to_schema(field),
@@ -89,7 +112,18 @@ def _build_column_from_model_field(field):
         'null': getattr(field, 'null', False),
         'blank': getattr(field, 'blank', False),
         'model_field': True,
+        'is_reference': False,
+        'reference_info': None,
     }
+
+    # Add reference info for foreign key fields
+    if isinstance(field, (models.ForeignKey, models.OneToOneField)):
+        column['is_reference'] = True
+        column['reference_info'] = _get_reference_field_info(field)
+        # Update example to show using name instead of ID
+        column['example'] = f"Enter name (e.g., 'Dermatology') or ID"
+
+    return column
 
 
 def _get_model_fields_for_table(table):
@@ -483,6 +517,34 @@ class TableSchemaView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+def _decode_file_content(uploaded_file):
+    """Decode file content trying multiple encodings."""
+    raw_bytes = uploaded_file.read()
+
+    # Try encodings in order of likelihood
+    encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252', 'iso-8859-1', 'windows-1252']
+
+    for encoding in encodings:
+        try:
+            return raw_bytes.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+
+    # If all fail, use latin-1 with errors replaced (will never fail)
+    return raw_bytes.decode('latin-1', errors='replace')
+
+
+def _clean_csv_content(content):
+    """Clean CSV content to handle multiline fields and other issues."""
+    # Replace carriage returns to normalize line endings
+    content = content.replace('\r\n', '\n').replace('\r', '\n')
+
+    # Replace any embedded null bytes
+    content = content.replace('\x00', '')
+
+    return content
+
+
 class TableImportPreviewView(APIView):
     """Preview import data before importing."""
     permission_classes = [IsAuthenticated]
@@ -526,10 +588,40 @@ class TableImportPreviewView(APIView):
                 file_name = uploaded_file.name.lower()
 
                 if file_name.endswith('.csv'):
-                    # Handle CSV
-                    content = uploaded_file.read().decode('utf-8-sig')
-                    reader = csv.DictReader(io.StringIO(content))
-                    rows = list(reader)
+                    # Handle CSV with multiple encoding support
+                    uploaded_file.seek(0)
+                    content = _decode_file_content(uploaded_file)
+                    content = _clean_csv_content(content)
+
+                    # Parse CSV handling potential multiline fields
+                    try:
+                        reader = csv.DictReader(io.StringIO(content, newline=None))
+                        rows = list(reader)
+                    except csv.Error:
+                        # Fallback: try parsing line by line with error recovery
+                        lines = content.split('\n')
+                        if len(lines) < 2:
+                            rows = []
+                        else:
+                            # Parse header
+                            header_reader = csv.reader(io.StringIO(lines[0]))
+                            headers = next(header_reader)
+
+                            # Parse data rows
+                            rows = []
+                            for line in lines[1:]:
+                                if line.strip():  # Skip empty lines
+                                    try:
+                                        row_reader = csv.reader(io.StringIO(line))
+                                        values = next(row_reader)
+                                        row_dict = {}
+                                        for i, header in enumerate(headers):
+                                            if header:
+                                                row_dict[header] = values[i] if i < len(values) else ''
+                                        rows.append(row_dict)
+                                    except Exception:
+                                        # Skip malformed rows
+                                        continue
                 elif file_name.endswith(('.xlsx', '.xls')):
                     # Handle Excel - requires openpyxl
                     try:
@@ -627,6 +719,56 @@ class TableImportExecuteView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser]
 
+    def _resolve_reference_field(self, field_name, value, import_columns):
+        """Resolve a foreign key value from name/label to ID."""
+        if not value:
+            return None, None
+
+        # Find the column definition
+        col_def = None
+        for col in import_columns:
+            if col['name'] == field_name:
+                col_def = col
+                break
+
+        if not col_def or not col_def.get('is_reference'):
+            return value, None  # Not a reference field, return as-is
+
+        ref_info = col_def.get('reference_info')
+        if not ref_info or not ref_info.get('reference_model'):
+            return value, None
+
+        # Try to parse as integer first (direct ID)
+        try:
+            int(value)
+            return int(value), None  # It's already an ID
+        except (ValueError, TypeError):
+            pass  # Not an integer, treat as name/label
+
+        # Look up by name/label
+        try:
+            ref_model = apps.get_model(ref_info['reference_model'])
+            label_field = ref_info.get('reference_label_field', 'name')
+
+            # Try exact match first
+            lookup = {f"{label_field}__iexact": str(value).strip()}
+            result = ref_model.objects.filter(**lookup).first()
+
+            if result:
+                return result.pk, None
+
+            # Try partial match
+            lookup = {f"{label_field}__icontains": str(value).strip()}
+            result = ref_model.objects.filter(**lookup).first()
+
+            if result:
+                return result.pk, None
+
+            return None, f"Could not find '{value}' in {ref_model._meta.verbose_name}"
+
+        except Exception as e:
+            return None, f"Error resolving reference: {str(e)}"
+
     def post(self, request, table_code):
         try:
             table = TableRegistry.objects.get(table_code=table_code, is_active=True)
@@ -652,46 +794,185 @@ class TableImportExecuteView(APIView):
 
             created = 0
             updated = 0
-            errors = 0
+            error_details = []
 
             try:
-                content = uploaded_file.read().decode('utf-8-sig')
-                reader = csv.DictReader(io.StringIO(content))
+                file_name = uploaded_file.name.lower()
+
+                if file_name.endswith('.csv'):
+                    # Handle CSV
+                    content = _decode_file_content(uploaded_file)
+                    content = _clean_csv_content(content)
+
+                    # Parse CSV handling potential multiline fields
+                    try:
+                        reader = csv.DictReader(io.StringIO(content, newline=None))
+                        rows = list(reader)
+                    except csv.Error:
+                        # Fallback: try parsing line by line with error recovery
+                        lines = content.split('\n')
+                        if len(lines) < 2:
+                            rows = []
+                        else:
+                            # Parse header
+                            header_reader = csv.reader(io.StringIO(lines[0]))
+                            headers = next(header_reader)
+
+                            # Parse data rows
+                            rows = []
+                            for line in lines[1:]:
+                                if line.strip():  # Skip empty lines
+                                    try:
+                                        row_reader = csv.reader(io.StringIO(line))
+                                        values = next(row_reader)
+                                        row_dict = {}
+                                        for i, header in enumerate(headers):
+                                            if header:
+                                                row_dict[header] = values[i] if i < len(values) else ''
+                                        rows.append(row_dict)
+                                    except Exception:
+                                        # Skip malformed rows
+                                        continue
+                elif file_name.endswith(('.xlsx', '.xls')):
+                    # Handle Excel - requires openpyxl
+                    try:
+                        import openpyxl
+                        uploaded_file.seek(0)
+                        wb = openpyxl.load_workbook(uploaded_file, data_only=True)
+                        ws = wb.active
+
+                        # Get headers from first row
+                        headers = [cell.value for cell in ws[1]]
+
+                        # Convert to dict rows
+                        rows = []
+                        for row in ws.iter_rows(min_row=2, values_only=True):
+                            row_dict = {}
+                            for i, header in enumerate(headers):
+                                if header:  # Skip empty headers
+                                    row_dict[header] = row[i] if i < len(row) else None
+                            rows.append(row_dict)
+                    except ImportError:
+                        return Response({
+                            'error': 'Excel support requires openpyxl. Please install it with: pip install openpyxl',
+                            'created': 0,
+                            'updated': 0,
+                            'errors': 1,
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return Response({
+                        'error': 'Unsupported file format. Please upload CSV or Excel (.xlsx, .xls) files.',
+                        'created': 0,
+                        'updated': 0,
+                        'errors': 1,
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Get import columns from registry for reference resolution
+                import_columns = [
+                    c for c in get_resolved_table_columns(table)
+                    if c.get('include_in_import', True)
+                ]
 
                 # Try to get model
                 model = None
+                model_error = None
                 if table.model_class:
                     try:
                         model = apps.get_model(*table.model_class.split('.'))
-                    except:
+                    except Exception as e:
+                        model_error = str(e)
                         pass
 
-                for row in reader:
+                if not model:
+                    return Response({
+                        'error': f'Could not load model {table.model_class}: {model_error or "Unknown error"}',
+                        'created': 0,
+                        'updated': 0,
+                        'errors': 1,
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                if len(rows) == 0:
+                    return Response({
+                        'error': 'No valid data rows found in the file',
+                        'created': 0,
+                        'updated': 0,
+                        'errors': 0,
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                for idx, row in enumerate(rows, start=2):
                     try:
-                        if model:
+                        # Resolve reference fields
+                        resolved_row = {}
+                        row_errors = []
+
+                        for key, value in row.items():
+                            if value:
+                                resolved_value, error = self._resolve_reference_field(
+                                    key, value, import_columns
+                                )
+                                if error:
+                                    row_errors.append(f"{key}: {error}")
+                                elif resolved_value is not None:
+                                    resolved_row[key] = resolved_value
+                                else:
+                                    resolved_row[key] = value
+                            else:
+                                resolved_row[key] = value
+
+                        if row_errors:
+                            error_details.append({
+                                'row': idx,
+                                'errors': row_errors
+                            })
+                            continue
+
+                        try:
                             if mode == 'insert':
-                                model.objects.create(**row)
+                                # Remove empty strings and convert to proper types
+                                cleaned_row = {k: v for k, v in resolved_row.items() if v != ''}
+                                obj = model.objects.create(**cleaned_row)
                                 created += 1
                             elif mode == 'update':
-                                identifier = row.get('naming_series') or row.get('id') or row.get('name')
+                                identifier = resolved_row.get('naming_series') or resolved_row.get('id') or resolved_row.get('name')
                                 if identifier:
-                                    existing = model.objects.filter(naming_series=identifier).first()
+                                    # Try to find by naming_series first, then by id
+                                    existing = None
+                                    if 'naming_series' in resolved_row:
+                                        existing = model.objects.filter(naming_series=identifier).first()
+                                    if not existing and 'id' in resolved_row:
+                                        try:
+                                            existing = model.objects.get(pk=resolved_row['id'])
+                                        except model.DoesNotExist:
+                                            pass
+                                    if not existing and 'name' in resolved_row:
+                                        existing = model.objects.filter(name=identifier).first()
+
                                     if existing:
-                                        for key, value in row.items():
+                                        cleaned_row = {k: v for k, v in resolved_row.items() if v != '' and k != 'id'}
+                                        for key, value in cleaned_row.items():
                                             setattr(existing, key, value)
                                         existing.save()
                                         updated += 1
                                     else:
+                                        cleaned_row = {k: v for k, v in resolved_row.items() if v != ''}
+                                        model.objects.create(**cleaned_row)
                                         created += 1
-                                        model.objects.create(**row)
                                 else:
+                                    cleaned_row = {k: v for k, v in resolved_row.items() if v != ''}
+                                    model.objects.create(**cleaned_row)
                                     created += 1
-                                    model.objects.create(**row)
-                        else:
-                            created += 1
+                        except Exception as e:
+                            import traceback
+                            error_details.append({
+                                'row': idx,
+                                'errors': [f"Database error: {str(e)}"]
+                            })
                     except Exception as e:
-                        errors += 1
-                        print(f"Import error: {e}")
+                        import traceback
+                        error_details.append({
+                            'row': idx,
+                            'errors': [f"Processing error: {str(e)}"]
+                        })
 
             except Exception as e:
                 return Response(
@@ -702,7 +983,8 @@ class TableImportExecuteView(APIView):
             return Response({
                 'created': created,
                 'updated': updated,
-                'errors': errors,
+                'errors': len(error_details),
+                'error_details': error_details[:20] if error_details else None,
             })
 
         except TableRegistry.DoesNotExist:

@@ -385,6 +385,33 @@ const writeRecentSearches = (values: string[]) => {
   }
 };
 
+const escapeRegExp = (value: string) =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const highlightMatch = (text: string, query: string) => {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return text;
+  }
+
+  const escapedQuery = escapeRegExp(trimmedQuery);
+  const parts = text.split(new RegExp(`(${escapedQuery})`, "ig"));
+
+  return parts.map((part, index) => {
+    if (part.toLowerCase() === trimmedQuery.toLowerCase()) {
+      return (
+        <mark
+          key={`${part}-${index}`}
+          className="rounded bg-emerald-500/20 px-0.5 text-emerald-700 dark:text-emerald-300"
+        >
+          {part}
+        </mark>
+      );
+    }
+    return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
+  });
+};
+
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -756,17 +783,17 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate">
-                                  {item.title}
+                                  {highlightMatch(item.title, searchQuery)}
                                 </span>
                                 <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
                                   Document
                                 </span>
                               </div>
                               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1 truncate">
-                                {item.subtitle}
+                                {highlightMatch(item.subtitle, searchQuery)}
                               </p>
                               <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1 truncate">
-                                {item.meta}
+                                {highlightMatch(item.meta, searchQuery)}
                               </p>
                             </div>
                             <Search className="w-3.5 h-3.5 mt-1 shrink-0 text-slate-300 dark:text-slate-600" />
@@ -808,17 +835,17 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className="text-[11px] font-black text-slate-800 dark:text-slate-100 truncate">
-                                  {item.title}
+                                  {highlightMatch(item.title, searchQuery)}
                                 </span>
                                 <span className="shrink-0 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-black uppercase tracking-widest">
                                   {item.entity}
                                 </span>
                               </div>
                               <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1 truncate">
-                                {item.subtitle}
+                                {highlightMatch(item.subtitle, searchQuery)}
                               </p>
                               <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1 truncate">
-                                {item.meta}
+                                {highlightMatch(item.meta, searchQuery)}
                               </p>
                             </div>
                             <Search className="w-3.5 h-3.5 mt-1 shrink-0 text-slate-300 dark:text-slate-600" />

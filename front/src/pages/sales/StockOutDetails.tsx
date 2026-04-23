@@ -18,7 +18,6 @@ import {
   documentPrimaryButtonClassName,
   documentSecondaryButtonClassName,
   documentSelectTriggerClassName,
-  documentTextareaClassName,
 } from "../../components/common/DocumentUI";
 import { useConfirmDialog } from "../../hooks/useConfirmDialog";
 import { useToast } from "../../hooks/useToast";
@@ -42,6 +41,8 @@ import {
   StockOutItemInput,
 } from "../../types/types";
 import { GetErrorMessage } from "@/src/components/ShowErrorToast";
+import { Info } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 
 const emptyItem = (): StockOutItemInput => ({
   medicine_id: null,
@@ -58,6 +59,140 @@ const formatDate = (value?: string | null) =>
         day: "numeric",
       })
     : "-";
+
+interface MedicineInfoPopoverProps {
+  selectedMedicine?: InventoryBatchItem;
+  availableBatches: InventoryBatchItem[];
+}
+
+const MedicineInfoPopover: React.FC<MedicineInfoPopoverProps> = ({
+  selectedMedicine,
+  availableBatches,
+}) => {
+  const [isHoveringDetails, setIsHoveringDetails] = useState(false);
+
+  if (!selectedMedicine) return null;
+
+  const statusColors: Record<string, string> = {
+    in_stock:
+      "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-900/30",
+    low_stock:
+      "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-900/30",
+    expiring_soon:
+      "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30",
+    expired:
+      "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30",
+  };
+  const statusColor =
+    statusColors[selectedMedicine.status_key] ?? statusColors.in_stock;
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => setIsHoveringDetails(true)}
+      onMouseLeave={() => setIsHoveringDetails(false)}
+    >
+      <span className="inline-flex cursor-help items-center justify-center rounded-full text-slate-400 transition-colors hover:text-emerald-500">
+        <Info className="h-3.5 w-3.5" />
+      </span>
+      <AnimatePresence>
+        {isHoveringDetails && (
+          <motion.div
+            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+            className="absolute left-0 top-full z-30 mt-2 w-[340px] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+          >
+            <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800">
+              <h4 className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                Stock Snapshot
+              </h4>
+              <span
+                className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${statusColor}`}
+              >
+                {selectedMedicine.status}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                  Generic
+                </p>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedMedicine.generic_name || "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                  Category
+                </p>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedMedicine.category || "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                  Supplier
+                </p>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedMedicine.supplier || "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                  Total Stock
+                </p>
+                <p className="text-xs font-black text-slate-900 dark:text-white">
+                  {selectedMedicine.medicine_total_quantity} units
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                  Selling Price
+                </p>
+                <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                  {selectedMedicine.selling_price}
+                </p>
+              </div>
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+                  Unit Cost
+                </p>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  {selectedMedicine.unit_cost}
+                </p>
+              </div>
+            </div>
+            <div className="mt-2.5 border-t border-slate-100 pt-2 dark:border-slate-800">
+              <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                Batches:{" "}
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  {availableBatches.length} available
+                </span>
+              </p>
+              {availableBatches[0] && (
+                <p className="mt-1.5 text-[10px] text-slate-500 dark:text-slate-400">
+                  Next expiry:{" "}
+                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                    {formatDate(availableBatches[0].expiry_date)}
+                  </span>
+                  {" · "}Batch:{" "}
+                  <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
+                    {(
+                      availableBatches[0] as InventoryBatchItem & {
+                        inventory_batch_number?: string;
+                      }
+                    ).inventory_batch_number || availableBatches[0].batch_number}
+                  </span>
+                </p>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
 
 const StockOutDetails: React.FC = () => {
   const location = useLocation();
@@ -315,7 +450,7 @@ const StockOutDetails: React.FC = () => {
         "This will deduct inventory batches and mark the document as Posted.",
       confirmLabel: "Post Stock Out",
       cancelLabel: "Cancel",
-      variant: "info",
+      variant: "default",
     });
 
     if (!confirmed) return;
@@ -559,12 +694,13 @@ const StockOutDetails: React.FC = () => {
           title="Document Details"
           description="Capture the customer reference and payment context before allocating inventory batches."
           accent="blue"
+          contentClassName="space-y-2"
         >
-          <div className="grid gap-5 md:grid-cols-2">
-            <DocumentField
-              label="Customer Name"
-              hint="Optional — leave blank for walk-in sales"
-            >
+          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-12">
+            <div className="space-y-1.5 xl:col-span-4">
+              <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                Customer Name
+              </label>
               <input
                 value={formData.customer_name}
                 onChange={(event) =>
@@ -573,12 +709,15 @@ const StockOutDetails: React.FC = () => {
                     customer_name: event.target.value,
                   }))
                 }
-                className={documentInputClassName}
-                placeholder="Walk-in customer or account name (optional)"
+                className={`${documentInputClassName} h-10 w-full`}
+                placeholder="Walk-in customer or account name"
                 disabled={!canEditForm}
               />
-            </DocumentField>
-            <DocumentField label="Invoice Number">
+            </div>
+            <div className="space-y-1.5 xl:col-span-3">
+              <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                Invoice Number
+              </label>
               <input
                 value={formData.invoice_number}
                 onChange={(event) =>
@@ -587,12 +726,15 @@ const StockOutDetails: React.FC = () => {
                     invoice_number: event.target.value,
                   }))
                 }
-                className={documentInputClassName}
-                placeholder="Auto-generated on save (optional)"
+                className={`${documentInputClassName} h-10 w-full`}
+                placeholder="Auto-generated on save"
                 disabled={!canEditForm}
               />
-            </DocumentField>
-            <DocumentField label="Payment Method">
+            </div>
+            <div className="space-y-1.5 xl:col-span-2">
+              <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                Payment Method
+              </label>
               <select
                 value={formData.payment_method}
                 onChange={(event) =>
@@ -601,7 +743,7 @@ const StockOutDetails: React.FC = () => {
                     payment_method: event.target.value,
                   }))
                 }
-                className={documentInputClassName}
+                className={`${documentInputClassName} h-10 w-full`}
                 disabled={!canEditForm}
               >
                 <option value="cash">Cash</option>
@@ -609,10 +751,12 @@ const StockOutDetails: React.FC = () => {
                 <option value="mobile_money">Mobile Money</option>
                 <option value="credit">Credit</option>
               </select>
-            </DocumentField>
-            <DocumentField label="Notes">
-              <textarea
-                rows={4}
+            </div>
+            <div className="space-y-1.5 xl:col-span-3">
+              <label className="block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">
+                Notes
+              </label>
+              <input
                 value={formData.notes}
                 onChange={(event) =>
                   setFormData((previous) => ({
@@ -620,11 +764,11 @@ const StockOutDetails: React.FC = () => {
                     notes: event.target.value,
                   }))
                 }
-                className={documentTextareaClassName}
+                className={`${documentInputClassName} h-10 w-full`}
                 placeholder="Optional sale notes"
                 disabled={!canEditForm}
               />
-            </DocumentField>
+            </div>
           </div>
         </DocumentCard>
 
@@ -654,14 +798,31 @@ const StockOutDetails: React.FC = () => {
             const availableBatches = item.medicine_id
               ? (batchesByMedicine[item.medicine_id] ?? [])
               : [];
-
+            const selectedMedicine =
+              item.medicine_id != null
+                ? medicineOptions.find(
+                  (med) => med.medicine_id === item.medicine_id,
+                )
+                : undefined;
             return (
               <div
                 key={`${index}-${item.medicine_id ?? "new"}`}
                 className="rounded-2xl border border-slate-200 p-4 dark:border-slate-800"
               >
                 <div className="grid gap-4 md:grid-cols-4">
-                  <DocumentField label={`Medicine ${index + 1}`}>
+                  <DocumentField
+                    label={
+                      <div className="flex items-center gap-1.5">
+                        <span>{`Medicine ${index + 1}`}</span>
+                        {selectedMedicine && (
+                          <MedicineInfoPopover
+                            selectedMedicine={selectedMedicine}
+                            availableBatches={availableBatches}
+                          />
+                        )}
+                      </div>
+                    }
+                  >
                     <SearchableSelect
                       options={medicineOptions.map((opt) => ({
                         value: String(opt.medicine_id),
@@ -687,118 +848,6 @@ const StockOutDetails: React.FC = () => {
                       createNewText="Add New Medicine"
                     />
                   </DocumentField>
-                  {item.medicine_id != null &&
-                    (() => {
-                      const med = medicineOptions.find(
-                        (o) => o.medicine_id === item.medicine_id,
-                      );
-                      const batches = batchesByMedicine[item.medicine_id] ?? [];
-                      if (!med) return null;
-                      const statusColors: Record<string, string> = {
-                        in_stock:
-                          "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-900/30",
-                        low_stock:
-                          "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-900/30",
-                        expiring_soon:
-                          "text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-900/30",
-                        expired:
-                          "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-900/30",
-                      };
-                      const statusColor =
-                        statusColors[med.status_key] ?? statusColors.in_stock;
-                      return (
-                        <div className="md:col-span-3 mt-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 px-4 py-3">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-2.5">
-                            Stock Snapshot
-                          </p>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Generic Name
-                              </span>
-                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                {med.generic_name || "—"}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Category
-                              </span>
-                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                {med.category || "—"}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Supplier
-                              </span>
-                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                {med.supplier || "—"}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Total Stock
-                              </span>
-                              <span className="text-xs font-black text-slate-900 dark:text-white">
-                                {med.medicine_total_quantity} units
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Selling Price
-                              </span>
-                              <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
-                                {med.selling_price}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Unit Cost
-                              </span>
-                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                {med.unit_cost}
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Batches
-                              </span>
-                              <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                                {batches.length} available
-                              </span>
-                            </div>
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                                Status
-                              </span>
-                              <span
-                                className={`inline-flex self-start items-center rounded border px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest ${statusColor}`}
-                              >
-                                {med.status}
-                              </span>
-                            </div>
-                          </div>
-                          {batches[0] && (
-                            <p className="mt-2.5 text-[10px] text-slate-500 dark:text-slate-400">
-                              Next expiry:{" "}
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                {formatDate(batches[0].expiry_date)}
-                              </span>
-                              {" · "}Batch:{" "}
-                              <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">
-                                {(
-                                  batches[0] as InventoryBatchItem & {
-                                    inventory_batch_number?: string;
-                                  }
-                                ).inventory_batch_number ||
-                                  batches[0].batch_number}
-                              </span>
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })()}
                   <DocumentField label="Inventory Batch">
                     <select
                       value={item.batch_id ?? ""}
